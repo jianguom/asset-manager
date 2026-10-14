@@ -1,5 +1,5 @@
 {
-  "name": "stocks",
+  "name": "asset-manager",
   "version": "0.13.0",
   "private": true,
   "type": "module",
@@ -30,6 +30,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "check:env": "node scripts/check-env.cjs",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tests/tsconfig.json --noEmit",
     "test": "vitest run",
     "verify": "npm run check:env && npm run lint && npm test && npm run build && npm run check:bundle && npm run check:scripts",
