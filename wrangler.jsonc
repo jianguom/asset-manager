@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "stocks",
+  "name": "asset-manager",
   "main": "./src/worker/index.ts",
   // 设为今天的日期（首次创建项目时）
   "compatibility_date": "2026-09-20",
