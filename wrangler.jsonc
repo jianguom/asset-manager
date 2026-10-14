@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "asset-manager",
+  "name": "stocks",
   "main": "./src/worker/index.ts",
   // 设为今天的日期（首次创建项目时）
   "compatibility_date": "2026-09-20",
@@ -16,7 +16,7 @@
       // - 一键部署：Cloudflare 向导按这里的绑定创建 D1 并回写真实 id
       // 直接拿占位值部署会在绑定 D1 时报错，这是有意的：提示你先建库。
       "database_name": "asset-manager-db",
-      "database_id": "5de5408e-5a3f-4764-9600-cb1a95fb7e0e",
+      "database_id": "6c5e877e-97a0-4469-a703-bf4f92bad6f4",
       "migrations_dir": "migrations"
     }
   ],
