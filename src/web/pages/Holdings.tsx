@@ -61,7 +61,7 @@ function daysSince(iso: string | null): number | null {
 export function HoldingsPage() {
 	const t = useT();
 	const timeZone = useTimeZone();
-	const { query, setQuery } = useRouter();
+	const { query, setQuery, navigate } = useRouter();
 	const showArchived = query.get("archived") === "1";
 	const filterAccount = query.get("account") ?? "";
 	const filterClass = query.get("class") ?? "";
@@ -762,9 +762,14 @@ export function HoldingsPage() {
 										</td>
 										<td>{holding.avg_cost === null ? t("common.none") : number(holding.avg_cost)}</td>
 										<td>
-											<button className="ghost" onClick={() => startEdit(holding)}>
-												{t("common.edit")}
-											</button>
+												{holding.class !== "cash" && (
+													<button className="ghost" onClick={() => navigate(`/trades/${holding.id}`)}>
+														交易
+													</button>
+												)}
+												<button className="ghost" onClick={() => startEdit(holding)}>
+													{t("common.edit")}
+												</button>
 											<button className="ghost" onClick={() => toggleArchive(holding)}>
 												{holding.archived === 1 ? t("accounts.restore") : t("accounts.archive")}
 											</button>

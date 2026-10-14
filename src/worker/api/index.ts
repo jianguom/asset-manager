@@ -9,6 +9,7 @@ import settingsRoutes from "./settings.routes";
 import historyRoutes from "./history.routes";
 import backupRoutes from "./backup.routes";
 import quotesRoutes from "./quotes.routes";
+import tradesRoutes from "../../trades/routes";
 
 const api = new Hono<AppEnv>();
 
@@ -27,6 +28,7 @@ guarded.route("/settings", settingsRoutes);
 guarded.route("/history", historyRoutes);
 guarded.route("/backup", backupRoutes);
 guarded.route("/quotes", quotesRoutes);
+guarded.route("/holdings/:id/trades", tradesRoutes); // 独立功能：持仓交易流水（src/trades/）
 
 api.route("/", guarded);
 

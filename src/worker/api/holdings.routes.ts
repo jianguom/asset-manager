@@ -120,6 +120,13 @@ holdings.patch("/:id", async (c) => {
 	if (!before) throw notFound(t("error.not_found"));
 
 	const payload = asRecord(await c.req.json(), t);
+	// ── 独立功能「交易流水」的锁定栅栏（src/trades/）─────────────────
+	// 开启 trade_mode 的持仓，数量与成本由交易流水推导，禁止手改。
+	// 注意：这段若被上游重写丢失，需重新应用（见 src/trades/README.md）。
+	if ((before.trade_mode ?? 0) === 1 && (payload.qty !== undefined || payload.avgCost !== undefined)) {
+		throw badRequest("该持仓已启用交易流水驱动，数量与平均成本由交易自动计算，不可手改");
+	}
+
 	const patch: Record<string, unknown> = {};
 	if (payload.accountId !== undefined) {
 		const accountId = requireString(payload, "accountId", { labelKey: "field.account", max: 64 }, t);

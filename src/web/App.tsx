@@ -18,6 +18,8 @@ const AccountsPage = lazy(() => import("./pages/Accounts").then((module) => ({ d
 const HoldingsPage = lazy(() => import("./pages/Holdings").then((module) => ({ default: module.HoldingsPage })));
 const HistoryPage = lazy(() => import("./pages/History").then((module) => ({ default: module.HistoryPage })));
 const SettingsPage = lazy(() => import("./pages/Settings").then((module) => ({ default: module.SettingsPage })));
+// 独立功能：持仓交易流水（/trades/:holdingId），来自 src/trades/
+const TradesPage = lazy(() => import("../trades/ui/TradesPage").then((module) => ({ default: module.TradesPage })));
 
 function PageLoading() {
 	const t = useT();
@@ -37,6 +39,7 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
 	const t = useT();
 
 	const page = (() => {
+		if (path.startsWith("/trades")) return <TradesPage />;
 		if (path.startsWith("/accounts")) return <AccountsPage />;
 		if (path.startsWith("/holdings")) return <HoldingsPage />;
 		if (path.startsWith("/history")) return <HistoryPage />;

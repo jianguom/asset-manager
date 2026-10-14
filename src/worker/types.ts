@@ -68,6 +68,10 @@ export interface HoldingRow {
 	note: string | null;
 	created_at: string;
 	updated_at: string;
+	/** 交易驱动开关：1 = qty/avg_cost/realized_pnl 由交易流水推导并锁定（独立功能） */
+	trade_mode?: number;
+	/** 交易驱动持仓的累计已实现盈亏 */
+	realized_pnl?: number | null;
 }
 
 /** Hono 环境类型 */

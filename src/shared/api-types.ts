@@ -45,6 +45,10 @@ export interface HoldingDto {
 	note: string | null;
 	created_at: string;
 	updated_at: string;
+	/** 交易驱动开关：1 = qty/avg_cost/realized_pnl 由交易流水推导（独立功能 src/trades/） */
+	trade_mode?: number;
+	/** 交易驱动持仓的累计已实现盈亏 */
+	realized_pnl?: number | null;
 }
 
 export interface HoldingListDto extends HoldingDto {
