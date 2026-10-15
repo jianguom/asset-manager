@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeFifo, checkTradeValid, type TradeLike } from "../../src/trades/calc";
+import { computeDiluted, computeFifo, computeWeighted, checkTradeValid, type TradeLike } from "../../src/trades/calc";
 
 /** 便捷构造交易 */
 function trade(partial: Partial<TradeLike>): TradeLike {
@@ -142,5 +142,116 @@ describe("checkTradeValid（写入前校验）", () => {
 	it("数量为 0 或负数被拒绝", () => {
 		expect(checkTradeValid(current, "c", trade({ id: "c", side: "buy", qty: 0, price: 10 }))).not.toBeNull();
 		expect(checkTradeValid(current, "c", trade({ id: "c", side: "buy", qty: -5, price: 10 }))).not.toBeNull();
+	});
+});
+
+describe("移动加权平均（weighted）", () => {
+	it("买入加权：均价 = 含费总成本 ÷ 总数量", () => {
+		const state = computeWeighted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10, fee: 5 }),
+			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
+		]);
+		expect(state.qty).toBe(200);
+		expect(state.avgCost).toBeCloseTo((1005 + 2000) / 200, 6); // 15.025
+		expect(state.lots).toHaveLength(0);
+	});
+
+	it("卖出不改均价，已实现盈亏单独结算", () => {
+		// 买 100@10 再买 100@20 → 均价 15；卖 50@30 → 已实现 = 1500 − 50*15 = 750
+		const state = computeWeighted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
+			trade({ id: "s", side: "sell", qty: 50, price: 30 }),
+		]);
+		expect(state.qty).toBe(150);
+		expect(state.avgCost).toBeCloseTo(15, 6);
+		expect(state.realizedPnl).toBeCloseTo(750, 6);
+	});
+
+	it("清仓后均价置空，重新买入从新价起算", () => {
+		const state = computeWeighted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10, traded_at: "2026-01-01" }),
+			trade({ id: "s", side: "sell", qty: 100, price: 12, traded_at: "2026-01-02" }),
+			trade({ id: "b", side: "buy", qty: 100, price: 20, traded_at: "2026-01-03" }),
+		]);
+		expect(state.qty).toBe(100);
+		expect(state.avgCost).toBeCloseTo(20, 6);
+		expect(state.realizedPnl).toBeCloseTo(200, 6);
+	});
+
+	it("卖出手续费从收入中扣除", () => {
+		const state = computeWeighted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "s", side: "sell", qty: 100, price: 12, fee: 50 }),
+		]);
+		expect(state.realizedPnl).toBeCloseTo(1150 - 1000, 6); // 150
+	});
+
+	it("卖出超过持仓：记录 oversoldQty 但不崩溃", () => {
+		const state = computeWeighted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "s", side: "sell", qty: 150, price: 12 }),
+		]);
+		expect(state.qty).toBe(0);
+		expect(state.avgCost).toBeNull();
+		expect(state.oversoldQty).toBeCloseTo(50, 6);
+	});
+});
+
+describe("摊薄成本法（diluted）", () => {
+	it("avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前量", () => {
+		// 买 1000@28 手续费 3 → 买入 28003；卖 400@28 手续费 2 → 卖出净额 11198
+		// avg = (28003 − 11198) / 600 = 28.008333…
+		const state = computeDiluted([
+			trade({ id: "a", side: "buy", qty: 1000, price: 28, fee: 3 }),
+			trade({ id: "s", side: "sell", qty: 400, price: 28, fee: 2 }),
+		]);
+		expect(state.qty).toBe(600);
+		expect(state.avgCost).toBeCloseTo((28003 - 11198) / 600, 6);
+	});
+
+	it("已实现盈亏恒为 0（盈亏已融入成本）", () => {
+		const state = computeDiluted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "s", side: "sell", qty: 50, price: 30 }),
+		]);
+		expect(state.realizedPnl).toBe(0);
+		expect(state.qty).toBe(50);
+	});
+
+	it("清仓后均价置空显示 —", () => {
+		const state = computeDiluted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "s", side: "sell", qty: 100, price: 12 }),
+		]);
+		expect(state.qty).toBe(0);
+		expect(state.avgCost).toBeNull();
+	});
+
+	it("卖出影响剩余成本（摊薄）", () => {
+		// 买 100@10 → 成本 1000；卖 50@12 → 摊薄后 avg = (1000 − 600) / 50 = 8
+		const state = computeDiluted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "s", side: "sell", qty: 50, price: 12 }),
+		]);
+		expect(state.avgCost).toBeCloseTo(8, 6);
+	});
+
+	it("买入手续费抬高成本、卖出手续费进一步摊薄", () => {
+		const state = computeDiluted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10, fee: 10 }), // 买入 1010
+			trade({ id: "s", side: "sell", qty: 50, price: 12, fee: 5 }), // 卖出净额 595
+		]);
+		expect(state.avgCost).toBeCloseTo((1010 - 595) / 50, 6); // 8.3
+	});
+
+	it("卖出超过持仓：记录 oversoldQty 但不崩溃", () => {
+		const state = computeDiluted([
+			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
+			trade({ id: "s", side: "sell", qty: 150, price: 12 }),
+		]);
+		expect(state.qty).toBe(0);
+		expect(state.avgCost).toBeNull();
+		expect(state.oversoldQty).toBeCloseTo(50, 6);
 	});
 });

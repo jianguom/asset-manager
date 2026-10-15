@@ -1,4 +1,5 @@
 import type { PublicSection } from "./public-sections";
+import type { CostMethod } from "../trades/calc";
 
 /**
  * 前后端共用的 API 数据结构
@@ -23,6 +24,8 @@ export interface AccountDto {
 	note: string | null;
 	created_at: string;
 	updated_at: string;
+	/** 成本口径：fifo（默认）/ weighted / diluted（独立功能 src/trades/） */
+	cost_method: CostMethod;
 }
 
 export interface HoldingDto {

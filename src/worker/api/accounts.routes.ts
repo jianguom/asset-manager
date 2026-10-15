@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { tOf } from "../core/i18n";
 import type { AppEnv } from "../types";
-import { ACCOUNT_KINDS, MARKETS } from "../../shared/labels";
+import { ACCOUNT_KINDS, COST_METHODS, MARKETS } from "../../shared/labels";
 import { badRequest, conflict, notFound, ok } from "../core/errors";
 import { writeAudit } from "../core/audit";
 import {
@@ -12,6 +12,7 @@ import {
 	listAccounts,
 	updateAccount,
 } from "../data/accounts.repo";
+import { recomputeByAccount } from "../../trades/repo";
 import { asRecord, optionalNumber, optionalString, requireId, requireOneOf, requireString, requireCurrency } from "./validate";
 
 const accounts = new Hono<AppEnv>();
@@ -35,6 +36,7 @@ accounts.post("/", async (c) => {
 		icon_key: optionalString(payload, "iconKey", { labelKey: "field.icon", max: 40 }, t) ?? null,
 		sort: optionalNumber(payload, "sort", { labelKey: "field.sort" }, t) ?? 0,
 		note: optionalString(payload, "note", { labelKey: "field.note", max: 200 }, t) ?? null,
+		cost_method: payload.costMethod === undefined ? "fifo" : requireOneOf(payload, "costMethod", COST_METHODS, "accounts.costMethod", t),
 	};
 	if (input.market && !MARKETS.includes(input.market as (typeof MARKETS)[number])) {
 		throw badRequest(t("error.field_enum", { label: t("field.market"), allowed: MARKETS.join(" / ") }));
@@ -62,8 +64,13 @@ accounts.patch("/:id", async (c) => {
 	if (payload.sort !== undefined) patch.sort = optionalNumber(payload, "sort", { labelKey: "field.sort" }, t) ?? 0;
 	if (payload.note !== undefined) patch.note = optionalString(payload, "note", { labelKey: "field.note", max: 200 }, t) ?? null;
 	if (payload.archived !== undefined) patch.archived = Boolean(payload.archived);
+	if (payload.costMethod !== undefined) patch.cost_method = requireOneOf(payload, "costMethod", COST_METHODS, "accounts.costMethod", t);
 
 	const after = await updateAccount(c.env.DB, id, patch);
+	// 切换成本口径 = 账户下全部「交易驱动」持仓按新口径重算（流水是唯一事实来源，可随时切回）
+	if (patch.cost_method !== undefined && patch.cost_method !== (before.cost_method ?? "fifo")) {
+		await recomputeByAccount(c.env.DB, id);
+	}
 	await writeAudit(c.env.DB, { entity: "account", entityId: id, action: "update", before, after });
 	return ok(c, after);
 });

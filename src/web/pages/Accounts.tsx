@@ -4,7 +4,7 @@ import { useAsync, useSubmit } from "../lib/useAsync";
 import { BrandIcon, defaultIconFor, IconPicker } from "../lib/icons";
 import { useT } from "../lib/i18n";
 import { money, percent } from "../lib/format";
-import { ACCOUNT_KINDS, kindLabel, marketLabel, MARKETS, type AccountKind, type Market } from "../../shared/labels";
+import { ACCOUNT_KINDS, COST_METHODS, costMethodLabel, kindLabel, marketLabel, MARKETS, type AccountKind, type Market } from "../../shared/labels";
 
 const CURRENCIES = ["USD", "HKD", "CNY"];
 
@@ -15,6 +15,7 @@ interface FormState {
 	market: Market | "";
 	iconKey: string | null;
 	note: string;
+	costMethod: (typeof COST_METHODS)[number];
 }
 
 const emptyForm = (): FormState => ({
@@ -24,6 +25,7 @@ const emptyForm = (): FormState => ({
 	market: "us",
 	iconKey: "broker",
 	note: "",
+	costMethod: "fifo",
 });
 
 export function AccountsPage() {
@@ -50,6 +52,7 @@ export function AccountsPage() {
 			market: (account.market as Market | null) ?? "",
 			iconKey: account.icon_key,
 			note: account.note ?? "",
+			costMethod: account.cost_method ?? "fifo",
 		});
 		setEditingId(account.id);
 		setOpen(true);
@@ -62,20 +65,21 @@ export function AccountsPage() {
 			return;
 		}
 		await run(async () => {
-			const payload = {
-				name: form.name.trim(),
-				kind: form.kind,
-				currency: form.currency,
-				market: form.kind === "cash" ? null : form.market || null,
-				iconKey: form.iconKey,
-				note: form.note.trim() || null,
-			};
-			if (editingId) await api.accounts.update(editingId, payload);
-			else await api.accounts.create(payload);
-			setOpen(false);
-			setEditingId(null);
-			accounts.reload();
-		});
+				const payload = {
+					name: form.name.trim(),
+					kind: form.kind,
+					currency: form.currency,
+					market: form.kind === "cash" ? null : form.market || null,
+					iconKey: form.iconKey,
+					note: form.note.trim() || null,
+					costMethod: form.costMethod,
+				};
+				if (editingId) await api.accounts.update(editingId, payload);
+				else await api.accounts.create(payload);
+				setOpen(false);
+				setEditingId(null);
+				accounts.reload();
+			});
 	};
 
 	const remove = async (account: AccountDto) => {
@@ -187,6 +191,19 @@ export function AccountsPage() {
 								</select>
 							</label>
 						)}
+						<label className="field">
+							<span>{t("accounts.costMethod")}</span>
+							<select
+								value={form.costMethod}
+								onChange={(e) => setForm({ ...form, costMethod: e.target.value as (typeof COST_METHODS)[number] })}
+							>
+								{COST_METHODS.map((method) => (
+									<option key={method} value={method}>
+										{costMethodLabel(t, method)}
+									</option>
+								))}
+							</select>
+						</label>
 					</div>
 
 					<label className="field">
@@ -231,6 +248,7 @@ export function AccountsPage() {
 								<th className="left">{t("accounts.colKind")}</th>
 								<th className="left">{t("accounts.colMarket")}</th>
 								<th className="left">{t("accounts.colCurrency")}</th>
+								<th className="left hide-sm">{t("accounts.colCostMethod")}</th>
 								<th className="left hide-sm">{t("accounts.colNote")}</th>
 								<th>{t("accounts.colValue", { currency: displayCurrency })}</th>
 								<th>{t("accounts.colShare")}</th>
@@ -252,6 +270,7 @@ export function AccountsPage() {
 										{account.market ? marketLabel(t, account.market as Market) : t("common.none")}
 									</td>
 									<td className="left">{account.currency}</td>
+									<td className="left muted hide-sm">{costMethodLabel(t, account.cost_method ?? "fifo")}</td>
 									<td className="left muted hide-sm">{account.note ?? t("common.none")}</td>
 									<td>
 										{account.archived === 1

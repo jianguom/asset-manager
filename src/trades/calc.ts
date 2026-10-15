@@ -1,11 +1,15 @@
 /**
- * FIFO（先进先出）逐笔成本核算 —— 纯函数，无任何 I/O / 框架依赖，可独立单测。
+ * 逐笔成本核算（多口径）—— 纯函数，无任何 I/O / 框架依赖，可独立单测。
  *
- * 为什么是 FIFO 而不是「移动加权平均」：
- *   移动平均在"高点加仓后减仓"时会把早期低价批也平均进去，剩余持仓成本失真、
- *   且无法核算每笔已实现盈亏。FIFO 把每次买入当作一个独立批次（lot），
- *   卖出时按时间序**先消耗最早买入的批**，逐批结出已实现盈亏 ——
- *   剩余成本、平均成本、已实现盈亏三者都可独立核算，这也是主流券商软件的口径。
+ * 支持三种口径（由持仓所属账户的 cost_method 决定，账户下所有持仓统一跟随）：
+ *   - fifo     先进先出：每次买入一个批次，卖出按时间序先消耗最早批次。
+ *              剩余成本、平均成本、已实现盈亏三者可独立核算（最专业、适合记账）。
+ *   - weighted 移动加权平均：只按买入做加权，卖出不改变均价；
+ *              已实现盈亏 = Σ(卖出净额 − 卖出量 × 当时加权均价)。
+ *              很多海外券商的口径。
+ *   - diluted  摊薄成本：avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前持有数量。
+ *              卖出会影响成本；已实现盈亏已融入成本，恒为 0（数学自洽，再算即双重计算）。
+ *              国内券商最常见的口径。
  *
  * 与主程序的隔离约定：
  *   - 本模块只读"交易流水"，不直接读写数据库；
@@ -46,19 +50,24 @@ export interface RemainingLot {
 	seed: boolean;
 }
 
+/** 成本口径：fifo（先进先出）/ weighted（移动加权平均）/ diluted（摊薄成本） */
+export type CostMethod = "fifo" | "weighted" | "diluted";
+
 /** 逐笔计算的结果：剩余批次 + 汇总 + 已实现盈亏 */
-export interface FifoState {
-	/** 剩余批次（FIFO 顺序 = 未卖出部分，按买入时间正序） */
+export interface CostState {
+	/** 本次计算采用的口径 */
+	method: CostMethod;
+	/** 剩余批次（仅 FIFO 有实际内容；weighted / diluted 为空数组，界面据此隐藏批次透视） */
 	lots: RemainingLot[];
 	/** 剩余总数量 */
 	qty: number;
-	/** 剩余总成本（含剩余批次的手续费） */
+	/** 剩余成本（含剩余批次的手续费；weighted/diluted = qty × avgCost） */
 	cost: number;
-	/** 加权平均成本 = 剩余成本 / 剩余数量（无持仓时为 null） */
+	/** 平均成本 = 剩余成本 / 剩余数量（无持仓时为 null；diluted 清仓后也置空显示 —） */
 	avgCost: number | null;
-	/** 累计已实现盈亏（含卖出手续费） */
+	/** 累计已实现盈亏（diluted 恒为 0：盈亏已融入成本） */
 	realizedPnl: number;
-	/** 全部卖出的收入合计（含手续费扣减），对账展示用 */
+	/** 全部卖出的净收入合计（含手续费扣减），对账展示用 */
 	soldProceeds: number;
 	/** 累计卖出数量 */
 	soldQty: number;
@@ -85,7 +94,7 @@ function sortTrades(trades: TradeLike[]): TradeLike[] {
  * @param trades 同一持仓的全部交易（未排序也可以，内部会稳定排序）
  * @returns 剩余批次、平均成本、已实现盈亏等汇总
  */
-export function computeFifo(trades: TradeLike[]): FifoState {
+export function computeFifo(trades: TradeLike[]): CostState {
 	const lots: RemainingLot[] = [];
 	let realizedPnl = 0;
 	let soldProceeds = 0;
@@ -142,6 +151,7 @@ export function computeFifo(trades: TradeLike[]): FifoState {
 	const cost = lots.reduce((sum, lot) => sum + lot.cost, 0);
 
 	return {
+		method: "fifo",
 		lots,
 		qty,
 		cost,
@@ -154,11 +164,141 @@ export function computeFifo(trades: TradeLike[]): FifoState {
 }
 
 /**
- * 校验一条将要写入/删除的交易不会破坏 FIFO 约束。
+ * 移动加权平均（只按买入加权，卖出不改变均价）。
+ *
+ * 规则：
+ *   - 买入：新均价 = (旧量×旧均价 + 本次买入含费) ÷ 新量；
+ *   - 卖出：均价不动，已实现盈亏 += 卖出净额 − 卖出量×当时均价；数量减少；
+ *   - 清仓（qty=0）后均价置空，下一次买入从该笔重新起算。
+ */
+export function computeWeighted(trades: TradeLike[]): CostState {
+	let qty = 0;
+	let avgCost: number | null = null;
+	let realizedPnl = 0;
+	let soldProceeds = 0;
+	let soldQty = 0;
+	let oversoldQty = 0;
+
+	for (const trade of sortTrades(trades)) {
+		if (trade.side === "buy") {
+			const buyAmount = trade.qty * trade.price + trade.fee;
+			if (qty > EPS) {
+				avgCost = (qty * avgCost! + buyAmount) / (qty + trade.qty);
+			} else {
+				avgCost = buyAmount / trade.qty;
+			}
+			qty += trade.qty;
+			continue;
+		}
+
+		// 卖出：只消耗手上有的部分，均价不变
+		let remaining = trade.qty;
+		if (qty > EPS) {
+			const consumed = Math.min(qty, remaining);
+			// 净收入按比例分摊，手续费包含在净收入里
+			const allocatedProceeds = (trade.qty * trade.price - trade.fee) * (consumed / trade.qty);
+			realizedPnl += allocatedProceeds - consumed * avgCost!;
+			qty -= consumed;
+			remaining -= consumed;
+			soldQty += consumed;
+			soldProceeds += allocatedProceeds;
+			if (nearZero(qty)) avgCost = null;
+		}
+
+		if (remaining > EPS) {
+			oversoldQty += remaining;
+			soldQty += remaining;
+			soldProceeds += (trade.qty * trade.price - trade.fee) * (remaining / trade.qty);
+		}
+	}
+
+	return {
+		method: "weighted",
+		lots: [],
+		qty,
+		cost: qty > EPS && avgCost !== null ? qty * avgCost : 0,
+		avgCost,
+		realizedPnl,
+		soldProceeds,
+		soldQty,
+		oversoldQty,
+	};
+}
+
+/**
+ * 摊薄成本法。
+ *
+ * avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前持有数量
+ *   - 买入：累计买入金额 += 数量×单价 + 手续费；
+ *   - 卖出：累计卖出净额 += 数量×单价 − 手续费；数量减少，成本被"摊薄"；
+ *   - 已实现盈亏恒为 0（盈亏已融入剩余成本，再算即双重计算）；
+ *   - 清仓（qty=0）后均价置空显示 —。
+ */
+export function computeDiluted(trades: TradeLike[]): CostState {
+	let qty = 0;
+	let totalBuy = 0; // Σ买入含费
+	let totalSell = 0; // Σ卖出净额（含手续费扣减）
+	let soldProceeds = 0;
+	let soldQty = 0;
+	let oversoldQty = 0;
+
+	for (const trade of sortTrades(trades)) {
+		if (trade.side === "buy") {
+			totalBuy += trade.qty * trade.price + trade.fee;
+			qty += trade.qty;
+			continue;
+		}
+
+		// 卖出：只消耗手上有的部分（正常流程由 checkTradeValid 保证不会卖超）
+		const netProceeds = trade.qty * trade.price - trade.fee;
+		const consumed = Math.min(qty, trade.qty);
+		if (consumed > EPS) {
+			totalSell += netProceeds * (consumed / trade.qty);
+			qty -= consumed;
+			soldQty += consumed;
+			soldProceeds += netProceeds * (consumed / trade.qty);
+		}
+		const remaining = trade.qty - consumed;
+		if (remaining > EPS) {
+			oversoldQty += remaining;
+			soldQty += remaining;
+			soldProceeds += netProceeds * (remaining / trade.qty);
+		}
+	}
+
+	const cost = qty > EPS ? totalBuy - totalSell : 0;
+	return {
+		method: "diluted",
+		lots: [],
+		qty,
+		cost,
+		avgCost: qty > EPS ? cost / qty : null,
+		realizedPnl: 0,
+		soldProceeds,
+		soldQty,
+		oversoldQty,
+	};
+}
+
+/** 按指定口径核算一组交易流水。 */
+export function computeState(trades: TradeLike[], method: CostMethod): CostState {
+	switch (method) {
+		case "weighted":
+			return computeWeighted(trades);
+		case "diluted":
+			return computeDiluted(trades);
+		case "fifo":
+		default:
+			return computeFifo(trades);
+	}
+}
+
+/**
+ * 校验一条将要写入/删除的交易不会破坏"卖出不超持仓"约束（与成本口径无关）。
  *
  * 场景：用户新增/修改/删除一笔交易时，可能造成"卖出量 > 剩余持仓"。
  * 做法：先从当前流水中去掉目标交易 targetId，再加入替换后的 next（若为 null 即删除），
- * 重算一遍 FIFO，一旦出现超额卖出即拒绝；新增交易时 targetId 不在 current 中，等价于直接追加。
+ * 重算一遍 FIFO（卖超量对所有口径一致），一旦出现超额卖出即拒绝；新增交易时 targetId 不在 current 中，等价于直接追加。
  *
  * @param current 当前全部流水（含将被增改删的目标交易）
  * @param targetId 将被替换/删除的交易 id（新增时传入新生成的 id，不在 current 中即可）

@@ -8,6 +8,10 @@ export type AssetClass = (typeof ASSET_CLASSES)[number];
 export const ACCOUNT_KINDS = ["broker", "exchange", "cash"] as const;
 export type AccountKind = (typeof ACCOUNT_KINDS)[number];
 
+/** 成本口径（独立功能 src/trades/）：fifo = 先进先出 / weighted = 移动加权平均 / diluted = 摊薄成本 */
+export const COST_METHODS = ["fifo", "weighted", "diluted"] as const;
+export type CostMethodEnum = (typeof COST_METHODS)[number];
+
 export const MARKETS = ["us", "hk", "cn", "crypto", "other"] as const;
 export type Market = (typeof MARKETS)[number];
 
@@ -50,6 +54,11 @@ export function classLabel(t: Translator, value: string): string {
 /** 账户类型标签：kind.broker / kind.exchange / kind.cash */
 export function kindLabel(t: Translator, value: string): string {
 	return t(`kind.${value}`);
+}
+
+/** 成本口径标签：costMethod.fifo / costMethod.weighted / costMethod.diluted */
+export function costMethodLabel(t: Translator, value: string): string {
+	return t(`costMethod.${value}`);
 }
 
 /** 市场标签：mkt.us / mkt.hk … */

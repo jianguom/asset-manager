@@ -26,6 +26,8 @@ export interface AccountRecord {
 	note: string | null;
 	created_at: string;
 	updated_at: string;
+	/** 成本口径（独立功能 src/trades/）：fifo / weighted / diluted */
+	cost_method?: string;
 }
 
 export interface HoldingRecord {
@@ -288,6 +290,8 @@ export function parseBackup(input: unknown, t: Translator): { file: BackupFile; 
 			note: strOrNull(row.note, 200),
 			created_at: iso(row.created_at, `accounts[${index}].created_at`),
 			updated_at: iso(row.updated_at, `accounts[${index}].updated_at`),
+			// 旧备份没有 cost_method 或值不合法时回退 fifo（账户口径是可选设置，不让它拦住导入）
+			cost_method: row.cost_method === "weighted" || row.cost_method === "diluted" ? row.cost_method : "fifo",
 		};
 		if (!KINDS.has(record.kind)) throw badRaw(`accounts[${index}].kind invalid: ${record.kind}`);
 		if (accountIds.has(record.id)) throw badRaw(`accounts duplicate id: ${record.id}`);
@@ -554,7 +558,7 @@ function countStatements(file: BackupFile, mode: ImportMode): number {
 }
 
 const ACCOUNT_COLUMNS =
-	"id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, created_at, updated_at";
+	"id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, cost_method, created_at, updated_at";
 const HOLDING_COLUMNS =
 	"id, account_id, class, market, symbol, name, currency, qty, price, avg_cost, price_updated_at, price_as_of, archived, note, created_at, updated_at";
 
@@ -586,11 +590,11 @@ export async function applyBackup(
 			? ""
 			: ` ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, market=excluded.market,
 			    currency=excluded.currency, icon_key=excluded.icon_key, icon_data=excluded.icon_data,
-			    sort=excluded.sort, archived=excluded.archived, note=excluded.note, updated_at=excluded.updated_at`;
+			    sort=excluded.sort, archived=excluded.archived, note=excluded.note, cost_method=excluded.cost_method, updated_at=excluded.updated_at`;
 	for (const row of data.accounts) {
 		statements.push(
 			db
-				.prepare(`INSERT INTO accounts (${ACCOUNT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)${accountConflict}`)
+				.prepare(`INSERT INTO accounts (${ACCOUNT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)${accountConflict}`)
 				.bind(
 					row.id,
 					row.name,
@@ -602,6 +606,7 @@ export async function applyBackup(
 					row.sort,
 					row.archived,
 					row.note,
+					row.cost_method ?? "fifo",
 					row.created_at,
 					row.updated_at,
 				),

@@ -1,6 +1,6 @@
 import type { HoldingRow } from "../worker/types";
 import { newId, nowIso } from "../worker/core/utils";
-import { computeFifo, checkTradeValid, type TradeLike } from "./calc";
+import { checkTradeValid, computeState, type CostMethod, type TradeLike } from "./calc";
 
 /**
  * 交易流水仓储层 —— 包含 D1 读写、开仓基准、以及"交易 → holdings 同步写回"。
@@ -160,13 +160,30 @@ export async function deleteTrade(db: D1Database, holdingId: string, tradeId: st
 	return recomputeHolding(db, holdingId);
 }
 
+/** 读取账户的成本口径（默认 fifo；老库迁移前没这个列时也回退 fifo） */
+export async function accountCostMethod(db: D1Database, accountId: string): Promise<CostMethod> {
+	const row = await db
+		.prepare(`SELECT cost_method FROM accounts WHERE id = ?`)
+		.bind(accountId)
+		.first<{ cost_method: CostMethod | null }>();
+	const method = row?.cost_method;
+	return method === "weighted" || method === "diluted" ? method : "fifo";
+}
+
 /**
- * 用持仓的全部交易重算 FIFO，并把 qty / avg_cost / realized_pnl 写回 holdings。
+ * 用持仓的全部交易按"所属账户的成本口径"重算，并把 qty / avg_cost / realized_pnl 写回 holdings。
  * 无交易时：qty 归 0、avg_cost 置空、realized_pnl 归 0。
  */
 export async function recomputeHolding(db: D1Database, holdingId: string): Promise<HoldingRow> {
+	const holding = await db
+		.prepare(`SELECT account_id FROM holdings WHERE id = ?`)
+		.bind(holdingId)
+		.first<{ account_id: string }>();
+	if (!holding) throw new Error("HOLDING_NOT_FOUND");
+
+	const method = await accountCostMethod(db, holding.account_id);
 	const trades = await listTrades(db, holdingId);
-	const state = computeFifo(trades);
+	const state = computeState(trades, method);
 
 	const qty = state.qty;
 	const avgCost = state.avgCost === null ? null : roundMoney(state.avgCost);
@@ -182,6 +199,17 @@ export async function recomputeHolding(db: D1Database, holdingId: string): Promi
 	const row = await db.prepare(`SELECT * FROM holdings WHERE id = ?`).bind(holdingId).first<HoldingRow>();
 	if (!row) throw new Error("HOLDING_NOT_FOUND");
 	return row;
+}
+
+/** 账户切换成本口径后，把它名下所有"交易驱动"持仓按新口径全部重算。 */
+export async function recomputeByAccount(db: D1Database, accountId: string): Promise<void> {
+	const { results } = await db
+		.prepare(`SELECT id FROM holdings WHERE account_id = ? AND trade_mode = 1`)
+		.bind(accountId)
+		.all<{ id: string }>();
+	for (const row of results ?? []) {
+		await recomputeHolding(db, row.id);
+	}
 }
 
 /**

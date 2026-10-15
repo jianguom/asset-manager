@@ -168,6 +168,13 @@ export function TradesPage() {
 	);
 	// 开仓基准批显示为独立标识
 	const isSeed = (trade: TradeLike) => Boolean(trade.seed);
+	// 成本口径展示名
+	const methodLabel =
+		view.costMethod === "weighted"
+			? "移动加权平均"
+			: view.costMethod === "diluted"
+				? "摊薄成本"
+				: "先进先出（FIFO）";
 
 	return (
 		<>
@@ -195,23 +202,31 @@ export function TradesPage() {
 					<div className="h3">{number(state.qty)}</div>
 				</div>
 				<div className="card panel" style={{ flex: 1 }}>
-					<div className="small muted">平均成本（FIFO）</div>
+					<div className="small muted">平均成本（{methodLabel}）</div>
 					<div className="h3">{state.avgCost === null ? "—" : money(state.avgCost, currency, 4)}</div>
 				</div>
 				<div className="card panel" style={{ flex: 1 }}>
 					<div className="small muted">累计已实现盈亏</div>
-					<div className={`h3 ${state.realizedPnl > 0 ? "positive" : state.realizedPnl < 0 ? "negative" : "muted"}`}>
-						{signedMoney(state.realizedPnl, currency)}
-					</div>
+					{view.costMethod === "diluted" ? (
+						<div className="h3 muted" title="摊薄成本法下盈亏已融入剩余成本，不再单独结算">
+							不适用
+						</div>
+					) : (
+						<div className={`h3 ${state.realizedPnl > 0 ? "positive" : state.realizedPnl < 0 ? "negative" : "muted"}`}>
+							{signedMoney(state.realizedPnl, currency)}
+						</div>
+					)}
 				</div>
 			</div>
 
 			{view.tradeMode && (
 				<div className="small muted" style={{ marginBottom: 12 }}>
-					该持仓已开启交易驱动：数量与平均成本由交易流水自动计算，持仓页不可手改。{" "}
-					{state.lots.length > 0
+					该持仓已开启交易驱动：数量与平均成本由交易流水按「{methodLabel}」口径自动计算，持仓页不可手改。{" "}
+					{view.costMethod === "fifo" && state.lots.length > 0
 						? `当前由 ${state.lots.length} 个未卖出批次构成。`
-						: "当前无剩余持仓。"}
+						: state.qty > 0
+							? "当前有剩余持仓。"
+							: "当前无剩余持仓。"}
 				</div>
 			)}
 

@@ -12,6 +12,8 @@ export interface AccountInput {
 	icon_data?: string | null;
 	sort?: number;
 	note?: string | null;
+	/** 成本口径（默认 fifo）：fifo / weighted / diluted（独立功能 src/trades/） */
+	cost_method?: AccountRow["cost_method"];
 }
 
 export async function listAccounts(db: D1Database, includeArchived = false): Promise<AccountRow[]> {
@@ -32,8 +34,8 @@ export async function createAccount(db: D1Database, input: AccountInput): Promis
 	const id = newId();
 	await db
 		.prepare(
-			`INSERT INTO accounts (id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+			`INSERT INTO accounts (id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, cost_method, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
 		)
 		.bind(
 			id,
@@ -45,6 +47,7 @@ export async function createAccount(db: D1Database, input: AccountInput): Promis
 			input.icon_data ?? null,
 			input.sort ?? 0,
 			input.note ?? null,
+			input.cost_method ?? "fifo",
 			now,
 			now,
 		)
@@ -72,12 +75,13 @@ export async function updateAccount(
 		sort: patch.sort ?? current.sort,
 		archived: patch.archived === undefined ? current.archived : patch.archived ? 1 : 0,
 		note: patch.note === undefined ? current.note : patch.note,
+		cost_method: patch.cost_method ?? current.cost_method ?? "fifo",
 	};
 
 	await db
 		.prepare(
 			`UPDATE accounts SET name = ?, kind = ?, market = ?, currency = ?, icon_key = ?, icon_data = ?,
-			        sort = ?, archived = ?, note = ?, updated_at = ? WHERE id = ?`,
+			        sort = ?, archived = ?, note = ?, cost_method = ?, updated_at = ? WHERE id = ?`,
 		)
 		.bind(
 			next.name,
@@ -89,6 +93,7 @@ export async function updateAccount(
 			next.sort,
 			next.archived,
 			next.note,
+			next.cost_method,
 			nowIso(),
 			id,
 		)

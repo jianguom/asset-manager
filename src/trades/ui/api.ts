@@ -1,4 +1,4 @@
-import type { FifoState, TradeLike } from "../calc";
+import type { CostMethod, CostState, TradeLike } from "../calc";
 
 /**
  * 交易流水前端 API 客户端 —— 自包含，不依赖 src/web/lib/api.ts，
@@ -45,10 +45,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
 
-/** 持仓交易视图：持仓信息 + 流水 + FIFO 计算结果 */
+/** 持仓交易视图：持仓信息 + 流水 + 口径计算结果 */
 export interface TradesView {
 	holdingId: string;
 	tradeMode: boolean;
+	/** 所属账户的成本口径：fifo / weighted / diluted */
+	costMethod: CostMethod;
 	holding: {
 		id: string;
 		name: string;
@@ -61,7 +63,7 @@ export interface TradesView {
 		price: number;
 	};
 	trades: TradeLike[];
-	state: FifoState;
+	state: CostState;
 }
 
 export interface TradeInput {

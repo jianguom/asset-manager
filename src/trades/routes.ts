@@ -12,7 +12,7 @@ import {
 	requireOneOf,
 	requireString,
 } from "../worker/api/validate";
-import { getHolding } from "../worker/data/accounts.repo";
+import { getAccount, getHolding } from "../worker/data/accounts.repo";
 import {
 	createTrade,
 	deleteTrade,
@@ -21,7 +21,7 @@ import {
 	listTrades,
 	updateTrade,
 } from "./repo";
-import { computeFifo } from "./calc";
+import { computeState, type CostMethod } from "./calc";
 
 /**
  * 持仓交易流水路由（独立功能，挂在 /api/holdings/:id/trades）
@@ -58,14 +58,17 @@ function parseTradePayload(
 	return out;
 }
 
-/** 统一返回 GET 视图：交易列表 + FIFO 状态 + 持仓 */
+/** 统一返回 GET 视图：交易列表 + 口径计算结果 + 持仓 + 口径 */
 async function tradesView(db: D1Database, holdingId: string) {
 	const holding = await getHolding(db, holdingId);
 	if (!holding) throw notFound("持仓不存在");
+	const account = await getAccount(db, holding.account_id);
+	const method: CostMethod = account?.cost_method ?? "fifo";
 	const tradeLikes = await listTrades(db, holdingId);
 	return {
 		holdingId,
 		tradeMode: (holding.trade_mode ?? 0) === 1,
+		costMethod: method,
 		holding: {
 			id: holding.id,
 			name: holding.name,
@@ -78,7 +81,7 @@ async function tradesView(db: D1Database, holdingId: string) {
 			price: holding.price,
 		},
 		trades: tradeLikes,
-		state: computeFifo(tradeLikes),
+		state: computeState(tradeLikes, method),
 	};
 }
 

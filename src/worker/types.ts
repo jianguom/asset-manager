@@ -2,6 +2,7 @@
  * Worker 绑定与环境类型
  */
 import type { PublicSection } from "../shared/public-sections";
+import type { CostMethod } from "../trades/calc";
 
 export interface Env {
 	DB: D1Database;
@@ -46,6 +47,8 @@ export interface AccountRow {
 	note: string | null;
 	created_at: string;
 	updated_at: string;
+	/** 成本口径：fifo（默认）/ weighted / diluted，账户下所有持仓统一跟随（独立功能 src/trades/） */
+	cost_method: CostMethod;
 }
 
 export interface HoldingRow {
