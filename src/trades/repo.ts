@@ -25,6 +25,7 @@ export function toTradeLike(row: {
 	price: number;
 	fee?: number | null;
 	seed?: number | null;
+	note?: string | null;
 	traded_at: string;
 }): TradeLike {
 	return {
@@ -35,13 +36,14 @@ export function toTradeLike(row: {
 		fee: row.fee ?? 0,
 		traded_at: row.traded_at,
 		seed: (row.seed ?? 0) === 1,
+		note: row.note ?? null,
 	};
 }
 
 export async function listTrades(db: D1Database, holdingId: string): Promise<TradeLike[]> {
 	const { results } = await db
 		.prepare(
-			`SELECT id, side, qty, price, fee, seed, traded_at FROM trades
+			`SELECT id, side, qty, price, fee, seed, note, traded_at FROM trades
 			 WHERE holding_id = ? ORDER BY traded_at ASC, id ASC`,
 		)
 		.bind(holdingId)
@@ -52,6 +54,7 @@ export async function listTrades(db: D1Database, holdingId: string): Promise<Tra
 			price: number;
 			fee: number | null;
 			seed: number | null;
+			note: string | null;
 			traded_at: string;
 		}>();
 	return (results ?? []).map(toTradeLike);
