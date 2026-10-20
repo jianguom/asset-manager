@@ -170,6 +170,16 @@
    若写在同一选择器列表里，不支持 :has() 的浏览器会因该选择器无效而丢弃整条规则。
    .has-cnav 由 CustomNavPage 的 useLayoutEffect 挂到 .app-shell 上（不依赖 :has()，兼容旧浏览器）；
    :has() 规则作为 JS 未运行时的第一帧兜底，二者只作用于嵌入页，不影响其它页面布局 */
+body.cnav-embed {
+	height: 100vh;
+	height: 100dvh;
+	overflow: hidden;
+}
+body:has(.cnav-page) {
+	height: 100vh;
+	height: 100dvh;
+	overflow: hidden;
+}
 .app-shell.has-cnav {
 	min-height: 100vh;
 	min-height: 100dvh;

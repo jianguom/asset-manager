@@ -27,14 +27,18 @@ export function CustomNavPage() {
 
 	const [slow, setSlow] = useState(false);
 
-	// 给共享的 .app-shell 加上 has-cnav 标记，配合 custom-nav.css 的类选择器建立 flex 高度链。
+	// 给共享的 .app-shell 加 has-cnav、body 加 cnav-embed 标记，配合 custom-nav.css
+	// 的类选择器建立 flex 高度链并钉死 body 高度（页面不产生滚动条）。
 	// 用类选择器而非 :has()，兼容不支持 :has() 的旧浏览器（useLayoutEffect 在首帧绘制前生效）。
 	useLayoutEffect(() => {
 		if (!item || item.mode !== "embed") return;
 		const shell = document.querySelector(".app-shell");
-		if (!shell) return;
-		shell.classList.add("has-cnav");
-		return () => shell.classList.remove("has-cnav");
+		shell?.classList.add("has-cnav");
+		document.body.classList.add("cnav-embed");
+		return () => {
+			shell?.classList.remove("has-cnav");
+			document.body.classList.remove("cnav-embed");
+		};
 	}, [item?.id, item?.url]);
 
 	useEffect(() => {
