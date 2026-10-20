@@ -44,7 +44,8 @@ export function CustomNavPage() {
 	useEffect(() => {
 		if (!item || item.mode !== "embed") return;
 		setSlow(false);
-		const timer = window.setTimeout(() => setSlow(true), 8000);
+		// 盯盘类数据页加载较慢（行情接口多），20 秒未完成才提示，避免误报遮挡已渲染内容
+		const timer = window.setTimeout(() => setSlow(true), 20000);
 		return () => window.clearTimeout(timer);
 	}, [item?.id, item?.url]);
 
