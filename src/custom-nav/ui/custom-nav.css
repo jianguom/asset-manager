@@ -168,24 +168,43 @@
 	flex: 1;
 	min-height: 0;
 	width: 100%;
+	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖 */
+	height: calc(100dvh - 184px);
 }
 .cnav-frame iframe {
 	width: 100%;
-	height: calc(100vh - 184px); /* 老浏览器兜底 */
-	height: calc(100dvh - 184px);
+	height: 100%;
 	min-height: 0;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	border: none;
 	background: #fff;
 	display: block;
+	/* 隐藏 iframe 自身滚动条（内容仍可滚动），追求无感嵌入 */
+	scrollbar-width: none;
+	-ms-overflow-style: none;
 }
-/* 非遮挡提示条：不覆盖 iframe，仅作加载过慢/嵌入被拒的兜底提示 */
+.cnav-frame iframe::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+	display: none;
+}
+/* 加载提示：iframe 区域内顶部居中小气泡，不遮挡页面，load 成功后自动消失 */
 .cnav-slow {
-	margin: 0;
-	font-size: 13px;
-	color: var(--muted);
+	position: absolute;
+	top: 10px;
+	left: 50%;
+	transform: translateX(-50%);
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	flex-wrap: wrap;
+	padding: 8px 12px;
+	font-size: 13px;
+	color: var(--muted);
+	background: var(--surface);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	border-radius: 8px;
+	max-width: calc(100% - 32px);
+	z-index: 2;
+}
+.cnav-slow p {
+	margin: 0;
 }
