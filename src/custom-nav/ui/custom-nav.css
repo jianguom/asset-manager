@@ -25,7 +25,7 @@
 	align-items: flex-start;
 	justify-content: center;
 	padding: 48px 16px;
-	z-index: 50;
+	z-index: 9999;
 	overflow: auto;
 }
 
