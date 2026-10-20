@@ -1,58 +1,3238 @@
 ﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 new file mode 100644
-index 0000000..da46719
+index 0000000..162c265
 --- /dev/null
 +++ b/custom-patches/custom.patch
-@@ -0,0 +1,29465 @@
+@@ -0,0 +1,32808 @@
 +﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 +new file mode 100644
-+index 0000000..869e937
++index 0000000..da46719
 +--- /dev/null
 ++++ b/custom-patches/custom.patch
-+@@ -0,0 +1,26135 @@
++@@ -0,0 +1,29465 @@
 ++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 ++new file mode 100644
-++index 0000000..ec4439f
+++index 0000000..869e937
 ++--- /dev/null
 +++++ b/custom-patches/custom.patch
-++@@ -0,0 +1,22782 @@
+++@@ -0,0 +1,26135 @@
 +++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 +++new file mode 100644
-+++index 0000000..e7af701
++++index 0000000..ec4439f
 +++--- /dev/null
 ++++++ b/custom-patches/custom.patch
-+++@@ -0,0 +1,19445 @@
++++@@ -0,0 +1,22782 @@
 ++++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 ++++new file mode 100644
-++++index 0000000..609bb7a
+++++index 0000000..e7af701
 ++++--- /dev/null
 +++++++ b/custom-patches/custom.patch
-++++@@ -0,0 +1,16150 @@
+++++@@ -0,0 +1,19445 @@
 +++++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 +++++new file mode 100644
-+++++index 0000000..6971cf3
++++++index 0000000..609bb7a
 +++++--- /dev/null
 ++++++++ b/custom-patches/custom.patch
-+++++@@ -0,0 +1,12839 @@
++++++@@ -0,0 +1,16150 @@
 ++++++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 ++++++new file mode 100644
-++++++index 0000000..775e362
+++++++index 0000000..6971cf3
 ++++++--- /dev/null
 +++++++++ b/custom-patches/custom.patch
-++++++@@ -0,0 +1,9564 @@
+++++++@@ -0,0 +1,12839 @@
 +++++++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 +++++++new file mode 100644
-+++++++index 0000000..635abca
++++++++index 0000000..775e362
 +++++++--- /dev/null
 ++++++++++ b/custom-patches/custom.patch
-+++++++@@ -0,0 +1,6360 @@
++++++++@@ -0,0 +1,9564 @@
 ++++++++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
 ++++++++new file mode 100644
-++++++++index 0000000..3cad00f
+++++++++index 0000000..635abca
 ++++++++--- /dev/null
 +++++++++++ b/custom-patches/custom.patch
-++++++++@@ -0,0 +1,3174 @@
-+++++++++﻿diff --git a/custom-patches/restore.ps1 b/custom-patches/restore.ps1
+++++++++@@ -0,0 +1,6360 @@
++++++++++﻿diff --git a/custom-patches/custom.patch b/custom-patches/custom.patch
++++++++++new file mode 100644
++++++++++index 0000000..3cad00f
++++++++++--- /dev/null
+++++++++++++ b/custom-patches/custom.patch
++++++++++@@ -0,0 +1,3174 @@
+++++++++++﻿diff --git a/custom-patches/restore.ps1 b/custom-patches/restore.ps1
+++++++++++new file mode 100644
+++++++++++index 0000000..9f93dce
+++++++++++--- /dev/null
++++++++++++++ b/custom-patches/restore.ps1
+++++++++++@@ -0,0 +1,81 @@
++++++++++++﻿<#
++++++++++++restore.ps1 — 上游仓库同步后，快速恢复自定义功能（交易流水 + 多成本法 + 自定义导航菜单）
++++++++++++============================================================
++++++++++++用法：
++++++++++++  powershell -ExecutionPolicy Bypass -File restore.ps1                # 恢复默认 clone
++++++++++++  powershell -ExecutionPolicy Bypass -File restore.ps1 -Repo D:\myfork # 恢复任意 fork 仓库
++++++++++++
++++++++++++原理：
++++++++++++  自定义功能 = fork 基线 dc695c8 之后的所有提交（550ec03 交易流水、d204ca1 多成本法、
++++++++++++  以及后续的 自定义导航菜单 src/custom-nav/）。
++++++++++++  custom.patch 保存了这一整段差异。恢复 = 用 `git apply --3way` 把差异重新打回仓库：
++++++++++++  --3way 依据补丁里的 blob 哈希做三方合并，即使上游改过上下文也能尽量自动恢复；
++++++++++++  只有"同一行两处都改过"才会冲突，冲突文件会列出，按本文件底部的手动步骤处理。
++++++++++++  migrations 单独处理：若上游已有同名迁移（编号冲突），改名后手动应用即可，绝不要覆盖。
++++++++++++
++++++++++++自定义导航菜单接线点速查（上游同步后若接线点被上游改写，按下面恢复）：
++++++++++++  - src/worker/api/index.ts       挂载 guarded.route("/custom-nav", customNavRoutes)
++++++++++++  - src/web/App.tsx               顶部 <nav> 追加 <CustomNav />；页面分支 path.startsWith("/custom") → CustomNavPage
++++++++++++  - public/_headers               CSP 追加 frame-src https: http:（iframe 嵌入外部页面必需）
++++++++++++  其余全部在 src/custom-nav/ 独立目录，上游 merge 不会碰它；配置存 settings KV，无需迁移。
++++++++++++
++++++++++++依赖：git 在 PATH 中。
++++++++++++#>
++++++++++++param(
++++++++++++  [string]$Repo = (Join-Path $env:TEMP "asset-manager-upstream"),
++++++++++++  [string]$Patch = (Join-Path $PSScriptRoot "custom.patch")
++++++++++++)
++++++++++++$ErrorActionPreference = "Stop"
++++++++++++
++++++++++++if (-not (Test-Path $Repo))  { Write-Error "仓库不存在: $Repo"; exit 1 }
++++++++++++if (-not (Test-Path $Patch)) { Write-Error "补丁不存在: $Patch"; exit 1 }
++++++++++++
++++++++++++Push-Location $Repo
++++++++++++try {
++++++++++++  Write-Host "== 0/4 当前状态（确认干净后再动手）=="
++++++++++++  git status --short
++++++++++++
++++++++++++  Write-Host "`n== 1/4 应用主体补丁（migrations 与 src/trades/README.md 除外，三方合并）=="
++++++++++++  git apply --3way --exclude="migrations/*" --exclude="src/trades/README.md" $Patch
++++++++++++  if ($LASTEXITCODE -eq 0) {
++++++++++++    Write-Host "  主体补丁应用成功。" -ForegroundColor Green
++++++++++++  } else {
++++++++++++    Write-Host "  存在冲突文件，见上方 git 的失败清单。这些文件需手动修复（步骤见文末），" -ForegroundColor Yellow
++++++++++++    Write-Host "  修完后可重新运行本脚本（已成功的部分不受影响，git apply 每次整体生效）。"
++++++++++++  }
++++++++++++
++++++++++++  Write-Host "`n== 2/4 处理 migrations（编号冲突时改名）=="
++++++++++++  $migrationFiles = (git apply --numstat $Patch 2>$null) |
++++++++++++    ForEach-Object { ($_ -split "`t")[2] } |
++++++++++++    Where-Object { $_ -like "migrations/*" }
++++++++++++  foreach ($m in $migrationFiles) {
++++++++++++    if (Test-Path $m) {
++++++++++++      Write-Host "  跳过 $m ：目标已存在（上游可能占用了编号）。" -ForegroundColor Yellow
++++++++++++      Write-Host "    → 把补丁中该文件复制为新编号（如 0010_xxx.sql）后手动执行迁移，并检查 SCHEMA_VERSION。"
++++++++++++    } else {
++++++++++++      git apply --3way --include=$m $Patch
++++++++++++      if ($LASTEXITCODE -eq 0) { Write-Host "  已恢复 $m" -ForegroundColor Green }
++++++++++++      else { Write-Host "  恢复 $m 失败，请手动处理。" -ForegroundColor Yellow }
++++++++++++    }
++++++++++++  }
++++++++++++
++++++++++++  Write-Host "`n== 3/4 校验自定义提交是否仍在历史里 =="
++++++++++++  git log --oneline --grep="持仓交易流水" --grep="多成本法" | ForEach-Object { Write-Host "  $_" }
++++++++++++  if ($LASTEXITCODE -ne 0) { Write-Host "  未检出自定义提交，请检查补丁是否完整应用。" -ForegroundColor Yellow }
++++++++++++
++++++++++++  Write-Host "`n== 4/4 收尾提醒 =="
++++++++++++  Write-Host "  1) 本地验证：把恢复后的 src/、migrations/ 复制回本地项目，运行 npx vite build 与 npx vitest run --maxWorkers=1"
++++++++++++  Write-Host "  2) 提交：git add -A; git commit -m 'restore: 自定义功能' ; git push origin main"
++++++++++++  Write-Host "  3) Cloudflare 自动构建并执行迁移，部署完成。"
++++++++++++
++++++++++++  Write-Host "`n手动修复冲突文件的方法（出现失败清单时）："
++++++++++++  Write-Host "  ① git apply --3way --exclude='migrations/*' --exclude='src/trades/README.md' $Patch --verbose   # 看清哪几个文件冲突"
++++++++++++  Write-Host "  ② 打开 custom.patch 找到对应文件的 hunk（@@ 行号块），照着补丁内容手工改回仓库文件"
++++++++++++  Write-Host "  ③ 常用接线点速查：src/worker/api/accounts.routes.ts（costMethod 参数+重算）、"
++++++++++++  Write-Host "     src/worker/data/accounts.repo.ts（cost_method 列）、src/web/pages/Accounts.tsx（口径下拉）、"
++++++++++++  Write-Host "     src/shared/version.ts（SCHEMA_VERSION 取两方较大值）、src/shared/locales/zh.ts|en.ts（costMethod.* 文案）、"
++++++++++++  Write-Host "     src/shared/labels.ts|api-types.ts、src/worker/types.ts、src/worker/services/backup.ts（cost_method 保留）"
++++++++++++  Write-Host "  ④ 说明：src/trades/README.md 不会被恢复（尊重你已删除它的决定）"
++++++++++++} finally {
++++++++++++  Pop-Location
++++++++++++}
+++++++++++diff --git a/migrations/0008_trades.sql b/migrations/0008_trades.sql
+++++++++++new file mode 100644
+++++++++++index 0000000..11f541e
+++++++++++--- /dev/null
++++++++++++++ b/migrations/0008_trades.sql
+++++++++++@@ -0,0 +1,33 @@
++++++++++++-- 0008_trades.sql — 独立功能：持仓交易流水 + FIFO 平均成本
++++++++++++--
++++++++++++-- 目标：针对持仓个股录入买卖交易记录，用 FIFO（先进先出）逐笔法
++++++++++++-- 自动计算平均成本价与已实现盈亏。坐标系与主程序隔离：
++++++++++++--   * 只新增一张 trades 表 + holdings 两个可选列，不动任何既有字段/行为
++++++++++++--   * holdings.qty / avg_cost 仍是主程序在写；本功能开启某持仓的 trade_mode 后，
++++++++++++--     才由交易流水回算并写回这两个字段，关闭后立即恢复手动。
++++++++++++--
++++++++++++-- 幂等：本文件可重复执行（Wrangler 也会保证只apply一次）。
++++++++++++
++++++++++++-- 持仓「交易驱动」开关：0 = 手动（原行为），1 = 由交易流水推导并锁定 qty/avg_cost/realized_pnl
++++++++++++ALTER TABLE holdings ADD COLUMN trade_mode INTEGER NOT NULL DEFAULT 0;
++++++++++++-- 交易驱动持仓的累计已实现盈亏（卖出收入 − 卖出消耗的成本，含手续费）
++++++++++++ALTER TABLE holdings ADD COLUMN realized_pnl REAL;
++++++++++++
++++++++++++-- 交易流水表（同一持仓的多笔买卖）
++++++++++++CREATE TABLE IF NOT EXISTS trades (
++++++++++++  id          TEXT PRIMARY KEY,
++++++++++++  holding_id  TEXT NOT NULL REFERENCES holdings (id) ON DELETE CASCADE,
++++++++++++  side        TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
++++++++++++  qty         REAL NOT NULL,
++++++++++++  price       REAL NOT NULL,             -- 成交单价（交易币种）
++++++++++++  fee         REAL NOT NULL DEFAULT 0,   -- 手续费：买加进成本、卖从收入扣除
++++++++++++  seed        INTEGER NOT NULL DEFAULT 0,-- 1 = 打开 trade_mode 时由既有持仓自动生成的「开仓基准」买入
++++++++++++  traded_at   TEXT NOT NULL,             -- 交易日 YYYY-MM-DD
++++++++++++  note        TEXT,
++++++++++++  created_at  TEXT NOT NULL,
++++++++++++  updated_at  TEXT NOT NULL
++++++++++++);
++++++++++++CREATE INDEX IF NOT EXISTS idx_trades_holding ON trades (holding_id, traded_at, id);
++++++++++++
++++++++++++INSERT INTO settings (key, value) VALUES ('schema_version', '7')
++++++++++++  ON CONFLICT (key) DO UPDATE SET value = '7';
+++++++++++\ No newline at end of file
+++++++++++diff --git a/migrations/0009_cost_method.sql b/migrations/0009_cost_method.sql
+++++++++++new file mode 100644
+++++++++++index 0000000..5095c60
+++++++++++--- /dev/null
++++++++++++++ b/migrations/0009_cost_method.sql
+++++++++++@@ -0,0 +1,15 @@
++++++++++++-- 0009_cost_method.sql — 独立功能：多成本法（账户级口径）
++++++++++++--
++++++++++++-- 在 FIFO 基础上新增「移动加权平均 weighted」与「摊薄成本 diluted」，
++++++++++++-- 口径挂在账户上（accounts.cost_method），账户下所有持仓统一跟随。
++++++++++++--   fifo     默认：先进先出逐批核算（原有行为）
++++++++++++--   weighted 只按买入移动加权，卖出不改变均价，已实现盈亏独立结算
++++++++++++--   diluted  摊薄成本 avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前量，已实现盈亏恒 0
++++++++++++-- trades 流水表仍是唯一事实来源，切换口径只改账户配置并重算，流水不丢、可随时切回。
++++++++++++--
++++++++++++-- 幂等：Wrangler 保证每个迁移文件只应用一次。
++++++++++++
++++++++++++ALTER TABLE accounts ADD COLUMN cost_method TEXT NOT NULL DEFAULT 'fifo';
++++++++++++
++++++++++++INSERT INTO settings (key, value) VALUES ('schema_version', '8')
++++++++++++  ON CONFLICT (key) DO UPDATE SET value = '8';
+++++++++++diff --git a/public/_headers b/public/_headers
+++++++++++index 16cc15f..4a79901 100644
+++++++++++--- a/public/_headers
++++++++++++++ b/public/_headers
+++++++++++@@ -1,5 +1,5 @@
+++++++++++ /*
+++++++++++-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
++++++++++++  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-src https: http:; frame-ancestors 'none'
+++++++++++   X-Content-Type-Options: nosniff
+++++++++++   Referrer-Policy: no-referrer
+++++++++++   X-Frame-Options: DENY
+++++++++++diff --git a/src/custom-nav/routes.ts b/src/custom-nav/routes.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..441121b
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/routes.ts
+++++++++++@@ -0,0 +1,65 @@
++++++++++++import { Hono } from "hono";
++++++++++++import type { AppEnv } from "../worker/types";
++++++++++++import { badRequest, ok } from "../worker/core/errors";
++++++++++++import { writeAudit } from "../worker/core/audit";
++++++++++++import { tOf } from "../worker/core/i18n";
++++++++++++import { asRecord } from "../worker/api/validate";
++++++++++++import { getSetting, setSetting } from "../worker/data/settings.repo";
++++++++++++import {
++++++++++++	CUSTOM_NAV_MAX_ITEMS,
++++++++++++	CUSTOM_NAV_SETTING_KEY,
++++++++++++	parseCustomNavItems,
++++++++++++	sanitizeCustomNavItem,
++++++++++++	serializeCustomNavItems,
++++++++++++	type CustomNavItem,
++++++++++++} from "./types";
++++++++++++
++++++++++++/**
++++++++++++ * 自定义导航菜单路由（独立功能，挂在 /api/custom-nav）
++++++++++++ *
++++++++++++ * 菜单配置是全局的（所有登录用户共享），存进 settings 表 KV，
++++++++++++ * 无需数据库迁移。GET 供顶栏渲染，PUT 由"管理面板"整表替换。
++++++++++++ */
++++++++++++const customNav = new Hono<AppEnv>();
++++++++++++
++++++++++++customNav.get("/", async (c) => {
++++++++++++	const raw = await getSetting(c.env.DB, CUSTOM_NAV_SETTING_KEY);
++++++++++++	return ok(c, { items: parseCustomNavItems(raw) });
++++++++++++});
++++++++++++
++++++++++++customNav.put("/", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const payload = asRecord(await c.req.json(), t);
++++++++++++	const incoming = payload.items;
++++++++++++	if (!Array.isArray(incoming)) throw badRequest("items 必须是数组");
++++++++++++
++++++++++++	const items: CustomNavItem[] = [];
++++++++++++	for (const entry of incoming) {
++++++++++++		const item = sanitizeCustomNavItem(entry);
++++++++++++		if (!item) throw badRequest("存在无效的菜单项（名称、地址或 id 不符合要求）");
++++++++++++		items.push(item);
++++++++++++	}
++++++++++++	if (items.length > CUSTOM_NAV_MAX_ITEMS) {
++++++++++++		throw badRequest(`最多支持 ${CUSTOM_NAV_MAX_ITEMS} 个自定义菜单`);
++++++++++++	}
++++++++++++	const seen = new Set<string>();
++++++++++++	for (const item of items) {
++++++++++++		if (seen.has(item.id)) throw badRequest("菜单 id 重复");
++++++++++++		seen.add(item.id);
++++++++++++	}
++++++++++++
++++++++++++	const next = serializeCustomNavItems(items);
++++++++++++	const before = await getSetting(c.env.DB, CUSTOM_NAV_SETTING_KEY);
++++++++++++	await setSetting(c.env.DB, CUSTOM_NAV_SETTING_KEY, next);
++++++++++++
++++++++++++	await writeAudit(c.env.DB, {
++++++++++++		entity: "settings",
++++++++++++		entityId: "custom_nav_items",
++++++++++++		action: "update",
++++++++++++		before: { items: parseCustomNavItems(before).length },
++++++++++++		after: { items: items.length },
++++++++++++	});
++++++++++++	return ok(c, { items });
++++++++++++});
++++++++++++
++++++++++++export default customNav;
+++++++++++diff --git a/src/custom-nav/types.ts b/src/custom-nav/types.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..25170e5
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/types.ts
+++++++++++@@ -0,0 +1,71 @@
++++++++++++/**
++++++++++++ * 自定义导航菜单 —— 独立功能（src/custom-nav/）
++++++++++++ *
++++++++++++ * 与上游零迁移、零依赖：配置整体存进 settings 表的 KV key（custom_nav_items），
++++++++++++ * 不需要建表、不需要 bump SCHEMA_VERSION，上游升级不会碰它。
++++++++++++ */
++++++++++++
++++++++++++/** 打开方式：embed = iframe 嵌入当前应用壳；tab = 浏览器新标签打开 */
++++++++++++export type CustomNavMode = "embed" | "tab";
++++++++++++
++++++++++++export interface CustomNavItem {
++++++++++++	/** 短 id（字母数字与连字符），用于站内路由 /custom/:id */
++++++++++++	id: string;
++++++++++++	/** 菜单显示名 */
++++++++++++	name: string;
++++++++++++	/** 目标页面地址（http/https） */
++++++++++++	url: string;
++++++++++++	mode: CustomNavMode;
++++++++++++}
++++++++++++
++++++++++++/** settings 表中的 KV key */
++++++++++++export const CUSTOM_NAV_SETTING_KEY = "custom_nav_items";
++++++++++++
++++++++++++export const CUSTOM_NAV_MAX_ITEMS = 20;
++++++++++++export const CUSTOM_NAV_NAME_MAX = 40;
++++++++++++export const CUSTOM_NAV_URL_MAX = 1000;
++++++++++++
++++++++++++/** 服务器端统一解析：坏数据整体回退为空列表（不影响主页渲染） */
++++++++++++export function parseCustomNavItems(raw: string | null | undefined): CustomNavItem[] {
++++++++++++	if (!raw) return [];
++++++++++++	try {
++++++++++++		const parsed = JSON.parse(raw) as unknown;
++++++++++++		if (!Array.isArray(parsed)) return [];
++++++++++++		const items: CustomNavItem[] = [];
++++++++++++		for (const entry of parsed) {
++++++++++++			const item = sanitizeCustomNavItem(entry);
++++++++++++			if (item) items.push(item);
++++++++++++		}
++++++++++++		return items.slice(0, CUSTOM_NAV_MAX_ITEMS);
++++++++++++	} catch {
++++++++++++		return [];
++++++++++++	}
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 单个条目清洗：返回合法条目；不合法返回 null。
++++++++++++ * 服务端 PUT 与前端展示共用，保证写入的必然是能渲染的。
++++++++++++ */
++++++++++++export function sanitizeCustomNavItem(value: unknown): CustomNavItem | null {
++++++++++++	if (!value || typeof value !== "object") return null;
++++++++++++	const entry = value as Record<string, unknown>;
++++++++++++	const id = typeof entry.id === "string" ? entry.id.trim() : "";
++++++++++++	const name = typeof entry.name === "string" ? entry.name.trim() : "";
++++++++++++	const url = typeof entry.url === "string" ? entry.url.trim() : "";
++++++++++++	const mode = entry.mode === "tab" ? "tab" : "embed";
++++++++++++	if (!/^[a-zA-Z0-9-]{1,32}$/.test(id)) return null;
++++++++++++	if (!name || name.length > CUSTOM_NAV_NAME_MAX) return null;
++++++++++++	if (!url || url.length > CUSTOM_NAV_URL_MAX) return null;
++++++++++++	try {
++++++++++++		const parsed = new URL(url);
++++++++++++		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
++++++++++++	} catch {
++++++++++++		return null;
++++++++++++	}
++++++++++++	return { id, name, url, mode };
++++++++++++}
++++++++++++
++++++++++++/** 序列化（存库用） */
++++++++++++export function serializeCustomNavItems(items: CustomNavItem[]): string {
++++++++++++	return JSON.stringify(items.slice(0, CUSTOM_NAV_MAX_ITEMS));
++++++++++++}
+++++++++++diff --git a/src/custom-nav/ui/CustomNav.tsx b/src/custom-nav/ui/CustomNav.tsx
+++++++++++new file mode 100644
+++++++++++index 0000000..4b247ec
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/CustomNav.tsx
+++++++++++@@ -0,0 +1,61 @@
++++++++++++import { useState } from "react";
++++++++++++import { Link, useRouter } from "../../web/lib/router";
++++++++++++import { useAsync } from "../../web/lib/useAsync";
++++++++++++import { useT } from "../../web/lib/i18n";
++++++++++++import { getNavItems } from "./store";
++++++++++++import { navText } from "./text";
++++++++++++import { ManagePanel } from "./ManagePanel";
++++++++++++import type { CustomNavItem } from "../types";
++++++++++++import "./custom-nav.css";
++++++++++++
++++++++++++/**
++++++++++++ * 顶栏自定义导航（渲染进 App.tsx 的 <nav>，纯追加式接线）
++++++++++++ *
++++++++++++ * embed 模式走站内路由 /custom/:id（由 CustomNavPage 用 iframe 嵌入应用壳）；
++++++++++++ * tab 模式直接新标签打开。末尾的齿轮按钮打开全局管理面板。
++++++++++++ */
++++++++++++export function CustomNav() {
++++++++++++	const { path } = useRouter();
++++++++++++	const t = navText(useT().lang);
++++++++++++	const { data, setData } = useAsync(() => getNavItems(), []);
++++++++++++	const [managing, setManaging] = useState(false);
++++++++++++	const items = data ?? [];
++++++++++++
++++++++++++	return (
++++++++++++		<>
++++++++++++			{items.map((item) =>
++++++++++++				item.mode === "tab" ? (
++++++++++++					<a
++++++++++++						key={item.id}
++++++++++++						className={path === `/custom/${item.id}` ? "active" : ""}
++++++++++++						href={item.url}
++++++++++++						target="_blank"
++++++++++++						rel="noopener noreferrer"
++++++++++++					>
++++++++++++						{item.name}
++++++++++++					</a>
++++++++++++				) : (
++++++++++++					<Link key={item.id} to={`/custom/${item.id}`} className={path === `/custom/${item.id}` ? "active" : ""}>
++++++++++++						{item.name}
++++++++++++					</Link>
++++++++++++				),
++++++++++++			)}
++++++++++++			<button type="button" className="cnav-gear" title={t.manage} aria-label={t.manage} onClick={() => setManaging(true)}>
++++++++++++				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
++++++++++++					<circle cx="12" cy="12" r="3" />
++++++++++++					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
++++++++++++				</svg>
++++++++++++			</button>
++++++++++++			{managing && (
++++++++++++				<ManagePanel
++++++++++++					items={items}
++++++++++++					onClose={() => setManaging(false)}
++++++++++++					onSaved={(next: CustomNavItem[]) => {
++++++++++++						setData(next);
++++++++++++						setManaging(false);
++++++++++++					}}
++++++++++++				/>
++++++++++++			)}
++++++++++++		</>
++++++++++++	);
++++++++++++}
+++++++++++diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
+++++++++++new file mode 100644
+++++++++++index 0000000..cd3bd50
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/CustomNavPage.tsx
+++++++++++@@ -0,0 +1,52 @@
++++++++++++import { useRouter } from "../../web/lib/router";
++++++++++++import { useAsync } from "../../web/lib/useAsync";
++++++++++++import { useT } from "../../web/lib/i18n";
++++++++++++import { getNavItems } from "./store";
++++++++++++import { navText } from "./text";
++++++++++++import "./custom-nav.css";
++++++++++++
++++++++++++/**
++++++++++++ * 自定义菜单嵌入页（/custom/:id）
++++++++++++ *
++++++++++++ * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
++++++++++++ * 顶部导航栏保持原样，看起来就是当前应用的一部分。
++++++++++++ * 目标网站若拒绝被嵌入（X-Frame-Options / CSP），工具栏提供新标签兜底。
++++++++++++ */
++++++++++++export function CustomNavPage() {
++++++++++++	const { path } = useRouter();
++++++++++++	const t = navText(useT().lang);
++++++++++++	const id = path.split("/")[2] ?? "";
++++++++++++	const { data } = useAsync(() => getNavItems(), []);
++++++++++++	const item = data?.find((entry) => entry.id === id);
++++++++++++
++++++++++++	if (item && item.mode === "embed") {
++++++++++++		return (
++++++++++++			<div className="cnav-page">
++++++++++++				<div className="cnav-toolbar">
++++++++++++					<span className="cnav-title">{item.name}</span>
++++++++++++					<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
++++++++++++						{t.openTab}
++++++++++++					</a>
++++++++++++				</div>
++++++++++++				<div className="cnav-frame">
++++++++++++					<iframe title={item.name} src={item.url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" />
++++++++++++				</div>
++++++++++++			</div>
++++++++++++		);
++++++++++++	}
++++++++++++
++++++++++++	return (
++++++++++++		<div className="cnav-page">
++++++++++++			<div className="card" style={{ padding: 16 }}>
++++++++++++				<p style={{ margin: 0 }}>
++++++++++++					{t.notFound}
++++++++++++					{item?.mode === "tab" && (
++++++++++++						<a className="ghost" style={{ marginLeft: 8 }} href={item.url} target="_blank" rel="noopener noreferrer">
++++++++++++							{t.openTab}
++++++++++++						</a>
++++++++++++					)}
++++++++++++				</p>
++++++++++++			</div>
++++++++++++		</div>
++++++++++++	);
++++++++++++}
+++++++++++diff --git a/src/custom-nav/ui/ManagePanel.tsx b/src/custom-nav/ui/ManagePanel.tsx
+++++++++++new file mode 100644
+++++++++++index 0000000..9f3a4a1
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/ManagePanel.tsx
+++++++++++@@ -0,0 +1,168 @@
++++++++++++import { useState } from "react";
++++++++++++import type { CustomNavItem, CustomNavMode } from "../types";
++++++++++++import { saveNavItems } from "./store";
++++++++++++import { navText } from "./text";
++++++++++++import { useT } from "../../web/lib/i18n";
++++++++++++
++++++++++++interface Props {
++++++++++++	items: CustomNavItem[];
++++++++++++	onClose: () => void;
++++++++++++	onSaved: (items: CustomNavItem[]) => void;
++++++++++++}
++++++++++++
++++++++++++const newId = () => (crypto?.randomUUID?.() ?? `nav-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
++++++++++++
++++++++++++export function ManagePanel({ items, onClose, onSaved }: Props) {
++++++++++++	const t = navText(useT().lang);
++++++++++++	const [list, setList] = useState<CustomNavItem[]>(items);
++++++++++++	const [editingId, setEditingId] = useState<string | null>(null);
++++++++++++	const [form, setForm] = useState<{ name: string; url: string; mode: CustomNavMode }>({ name: "", url: "", mode: "embed" });
++++++++++++	const [saving, setSaving] = useState(false);
++++++++++++	const [error, setError] = useState<string | null>(null);
++++++++++++
++++++++++++	const beginEdit = (item: CustomNavItem) => {
++++++++++++		setForm({ name: item.name, url: item.url, mode: item.mode });
++++++++++++		setEditingId(item.id);
++++++++++++	};
++++++++++++
++++++++++++	const addItem = () => {
++++++++++++		const item: CustomNavItem = { id: newId(), name: "", url: "", mode: "embed" };
++++++++++++		setList((prev) => [item, ...prev]);
++++++++++++		beginEdit(item);
++++++++++++	};
++++++++++++
++++++++++++	const saveRow = () => {
++++++++++++		const name = form.name.trim();
++++++++++++		if (!name) {
++++++++++++			setError(t.nameRequired);
++++++++++++			return;
++++++++++++		}
++++++++++++		const url = form.url.trim();
++++++++++++		let parsed: URL;
++++++++++++		try {
++++++++++++			parsed = new URL(url);
++++++++++++		} catch {
++++++++++++			setError(t.invalidUrl);
++++++++++++			return;
++++++++++++		}
++++++++++++		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
++++++++++++			setError(t.invalidUrl);
++++++++++++			return;
++++++++++++		}
++++++++++++		setList((prev) => prev.map((item) => (item.id === editingId ? { ...item, name, url, mode: form.mode } : item)));
++++++++++++		setEditingId(null);
++++++++++++		setForm({ name: "", url: "", mode: "embed" });
++++++++++++		setError(null);
++++++++++++	};
++++++++++++
++++++++++++	const cancelEdit = () => {
++++++++++++		if (editingId && list.find((item) => item.id === editingId)?.name === "" && !list.find((item) => item.id === editingId)?.url) {
++++++++++++			setList((prev) => prev.filter((item) => item.id !== editingId));
++++++++++++		}
++++++++++++		setEditingId(null);
++++++++++++		setError(null);
++++++++++++	};
++++++++++++
++++++++++++	const removeItem = (id: string) => {
++++++++++++		setList((prev) => prev.filter((item) => item.id !== id));
++++++++++++		if (editingId === id) setEditingId(null);
++++++++++++	};
++++++++++++
++++++++++++	const move = (id: string, dir: -1 | 1) => {
++++++++++++		setList((prev) => {
++++++++++++			const index = prev.findIndex((item) => item.id === id);
++++++++++++			const target = index + dir;
++++++++++++			if (index < 0 || target < 0 || target >= prev.length) return prev;
++++++++++++			const next = [...prev];
++++++++++++			[next[index], next[target]] = [next[target], next[index]];
++++++++++++			return next;
++++++++++++		});
++++++++++++	};
++++++++++++
++++++++++++	const persist = async () => {
++++++++++++		if (!editingId && list.some((item) => !item.name.trim())) {
++++++++++++			setError(t.nameRequired);
++++++++++++			return;
++++++++++++		}
++++++++++++		setSaving(true);
++++++++++++		setError(null);
++++++++++++		try {
++++++++++++			const saved = await saveNavItems(list);
++++++++++++			onSaved(saved);
++++++++++++		} catch (err) {
++++++++++++			setError(err instanceof Error ? err.message : t.cancel);
++++++++++++		} finally {
++++++++++++			setSaving(false);
++++++++++++		}
++++++++++++	};
++++++++++++
++++++++++++	return (
++++++++++++		<div className="cnav-overlay" onClick={onClose}>
++++++++++++			<div className="card cnav-panel" onClick={(event) => event.stopPropagation()}>
++++++++++++				<h2>{t.manage}</h2>
++++++++++++
++++++++++++				{list.length === 0 && !editingId && <div className="cnav-empty">{t.empty}</div>}
++++++++++++
++++++++++++				{list.map((item) =>
++++++++++++					item.id === editingId ? (
++++++++++++						<div key={item.id} className="cnav-form">
++++++++++++							<div className="cnav-form-row">
++++++++++++								<label>{t.name}</label>
++++++++++++								<input
++++++++++++									type="text"
++++++++++++									value={form.name}
++++++++++++									maxLength={40}
++++++++++++									placeholder={t.namePlaceholder}
++++++++++++									onChange={(event) => setForm({ ...form, name: event.target.value })}
++++++++++++								/>
++++++++++++							</div>
++++++++++++							<div className="cnav-form-row">
++++++++++++								<label>{t.url}</label>
++++++++++++								<input
++++++++++++									type="url"
++++++++++++									value={form.url}
++++++++++++									maxLength={1000}
++++++++++++									placeholder={t.urlPlaceholder}
++++++++++++									onChange={(event) => setForm({ ...form, url: event.target.value })}
++++++++++++								/>
++++++++++++							</div>
++++++++++++							<div className="cnav-form-row">
++++++++++++								<label>{t.mode}</label>
++++++++++++								<select value={form.mode} onChange={(event) => setForm({ ...form, mode: event.target.value as CustomNavMode })}>
++++++++++++									<option value="embed">{t.embed}</option>
++++++++++++									<option value="tab">{t.tab}</option>
++++++++++++								</select>
++++++++++++							</div>
++++++++++++							<div className="cnav-form-actions">
++++++++++++								<button className="ghost" onClick={cancelEdit}>{t.cancel}</button>
++++++++++++								<button onClick={saveRow}>{t.save}</button>
++++++++++++							</div>
++++++++++++						</div>
++++++++++++					) : (
++++++++++++						<div key={item.id} className="cnav-row">
++++++++++++							<span className="cnav-row-name">{item.name}</span>
++++++++++++							<span className="cnav-row-url">{item.url}</span>
++++++++++++							<span className="cnav-badge">{item.mode === "embed" ? t.embed : t.tab}</span>
++++++++++++							<div className="cnav-row-actions">
++++++++++++								<button className="ghost" title={t.moveUp} onClick={() => move(item.id, -1)}>↑</button>
++++++++++++								<button className="ghost" title={t.moveDown} onClick={() => move(item.id, 1)}>↓</button>
++++++++++++								<button className="ghost" title={t.edit} onClick={() => beginEdit(item)}>{t.edit}</button>
++++++++++++								<button className="ghost danger" title={t.delete} onClick={() => removeItem(item.id)}>{t.delete}</button>
++++++++++++							</div>
++++++++++++						</div>
++++++++++++					),
++++++++++++				)}
++++++++++++
++++++++++++				<div className="cnav-panel-footer">
++++++++++++					<span className="cnav-count">{t.itemsCount(list.length)}</span>
++++++++++++					<div className="cnav-form-actions">
++++++++++++						<button className="ghost" onClick={addItem}>{t.add}</button>
++++++++++++						<button className="ghost" onClick={onClose}>{t.close}</button>
++++++++++++						<button disabled={saving} onClick={persist}>{t.save}</button>
++++++++++++					</div>
++++++++++++				</div>
++++++++++++				{error && <p className="form-error">{error}</p>}
++++++++++++			</div>
++++++++++++		</div>
++++++++++++	);
++++++++++++}
+++++++++++diff --git a/src/custom-nav/ui/api.ts b/src/custom-nav/ui/api.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..ebe74c3
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/api.ts
+++++++++++@@ -0,0 +1,50 @@
++++++++++++import type { CustomNavItem } from "../types";
++++++++++++
++++++++++++/**
++++++++++++ * 自定义导航前端 API 客户端 —— 自包含，不依赖 src/web/lib/api.ts，
++++++++++++ * 保证本功能文件夹可以整体独立同步，与主程序升级互不牵连。
++++++++++++ */
++++++++++++
++++++++++++interface Envelope<T> {
++++++++++++	ok: boolean;
++++++++++++	data?: T;
++++++++++++	error?: { code: string; message: string };
++++++++++++}
++++++++++++
++++++++++++export class CustomNavApiError extends Error {
++++++++++++	readonly status: number;
++++++++++++	readonly code: string;
++++++++++++	constructor(status: number, code: string, message: string) {
++++++++++++		super(message);
++++++++++++		this.status = status;
++++++++++++		this.code = code;
++++++++++++	}
++++++++++++}
++++++++++++
++++++++++++async function request<T>(path: string, init?: RequestInit): Promise<T> {
++++++++++++	const response = await fetch(path, {
++++++++++++		credentials: "same-origin",
++++++++++++		headers: init?.body ? { "Content-Type": "application/json" } : undefined,
++++++++++++		...init,
++++++++++++	});
++++++++++++	let payload: Envelope<T> | null = null;
++++++++++++	try {
++++++++++++		payload = (await response.json()) as Envelope<T>;
++++++++++++	} catch {
++++++++++++		payload = null;
++++++++++++	}
++++++++++++	if (!response.ok || !payload?.ok) {
++++++++++++		throw new CustomNavApiError(
++++++++++++			response.status,
++++++++++++			payload?.error?.code ?? "request_failed",
++++++++++++			payload?.error?.message ?? `请求失败（HTTP ${response.status}）`,
++++++++++++		);
++++++++++++	}
++++++++++++	return payload.data as T;
++++++++++++}
++++++++++++
++++++++++++export const navApi = {
++++++++++++	get: () => request<{ items: CustomNavItem[] }>("/api/custom-nav"),
++++++++++++	put: (items: CustomNavItem[]) =>
++++++++++++		request<{ items: CustomNavItem[] }>("/api/custom-nav", { method: "PUT", body: JSON.stringify({ items }) }),
++++++++++++};
+++++++++++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
+++++++++++new file mode 100644
+++++++++++index 0000000..b687b42
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/custom-nav.css
+++++++++++@@ -0,0 +1,176 @@
++++++++++++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
++++++++++++.cnav-gear {
++++++++++++	display: inline-flex;
++++++++++++	align-items: center;
++++++++++++	justify-content: center;
++++++++++++	width: 28px;
++++++++++++	height: 28px;
++++++++++++	padding: 0;
++++++++++++	border: none;
++++++++++++	border-radius: 999px;
++++++++++++	background: transparent;
++++++++++++	color: var(--muted);
++++++++++++	cursor: pointer;
++++++++++++}
++++++++++++.cnav-gear:hover {
++++++++++++	background: var(--surface-2);
++++++++++++	color: var(--text);
++++++++++++}
++++++++++++
++++++++++++.cnav-overlay {
++++++++++++	position: fixed;
++++++++++++	inset: 0;
++++++++++++	background: rgb(0 0 0 / 0.45);
++++++++++++	display: flex;
++++++++++++	align-items: flex-start;
++++++++++++	justify-content: center;
++++++++++++	padding: 48px 16px;
++++++++++++	z-index: 50;
++++++++++++	overflow: auto;
++++++++++++}
++++++++++++
++++++++++++.cnav-panel {
++++++++++++	width: 100%;
++++++++++++	max-width: 560px;
++++++++++++	padding: 20px;
++++++++++++	display: flex;
++++++++++++	flex-direction: column;
++++++++++++	gap: 12px;
++++++++++++}
++++++++++++
++++++++++++.cnav-panel h2 {
++++++++++++	margin: 0;
++++++++++++	font-size: 16px;
++++++++++++}
++++++++++++
++++++++++++.cnav-row {
++++++++++++	display: flex;
++++++++++++	align-items: center;
++++++++++++	gap: 8px;
++++++++++++	padding: 8px 0;
++++++++++++	border-bottom: 1px solid var(--border);
++++++++++++}
++++++++++++.cnav-row:last-child {
++++++++++++	border-bottom: none;
++++++++++++}
++++++++++++.cnav-row-name {
++++++++++++	flex: 1;
++++++++++++	min-width: 0;
++++++++++++	overflow: hidden;
++++++++++++	text-overflow: ellipsis;
++++++++++++	white-space: nowrap;
++++++++++++	font-size: 14px;
++++++++++++}
++++++++++++.cnav-row-url {
++++++++++++	flex: 2;
++++++++++++	min-width: 0;
++++++++++++	overflow: hidden;
++++++++++++	text-overflow: ellipsis;
++++++++++++	white-space: nowrap;
++++++++++++	color: var(--muted);
++++++++++++	font-size: 12px;
++++++++++++}
++++++++++++.cnav-badge {
++++++++++++	flex-shrink: 0;
++++++++++++	font-size: 11px;
++++++++++++	padding: 2px 8px;
++++++++++++	border-radius: 999px;
++++++++++++	background: var(--surface-2);
++++++++++++	color: var(--muted);
++++++++++++}
++++++++++++.cnav-row-actions {
++++++++++++	display: flex;
++++++++++++	gap: 4px;
++++++++++++	flex-shrink: 0;
++++++++++++}
++++++++++++
++++++++++++.cnav-form {
++++++++++++	display: flex;
++++++++++++	flex-direction: column;
++++++++++++	gap: 8px;
++++++++++++	padding: 8px 0;
++++++++++++	border-bottom: 1px solid var(--border);
++++++++++++}
++++++++++++.cnav-form-row {
++++++++++++	display: flex;
++++++++++++	gap: 8px;
++++++++++++	align-items: center;
++++++++++++}
++++++++++++.cnav-form-row label {
++++++++++++	flex: 0 0 auto;
++++++++++++	width: 70px;
++++++++++++	font-size: 13px;
++++++++++++	color: var(--muted);
++++++++++++}
++++++++++++.cnav-form-row input[type="text"],
++++++++++++.cnav-form-row input[type="url"],
++++++++++++.cnav-form-row select {
++++++++++++	flex: 1;
++++++++++++	min-width: 0;
++++++++++++}
++++++++++++.cnav-form-actions {
++++++++++++	display: flex;
++++++++++++	gap: 8px;
++++++++++++	justify-content: flex-end;
++++++++++++}
++++++++++++
++++++++++++.cnav-empty {
++++++++++++	color: var(--muted);
++++++++++++	font-size: 13px;
++++++++++++	padding: 12px 0;
++++++++++++	text-align: center;
++++++++++++}
++++++++++++
++++++++++++.cnav-error {
++++++++++++	color: var(--danger, #dc2626);
++++++++++++	font-size: 13px;
++++++++++++	margin: 0;
++++++++++++}
++++++++++++.cnav-panel button.danger {
++++++++++++	color: var(--danger, #dc2626);
++++++++++++}
++++++++++++
++++++++++++.cnav-panel-footer {
++++++++++++	display: flex;
++++++++++++	align-items: center;
++++++++++++	justify-content: space-between;
++++++++++++	gap: 8px;
++++++++++++	border-top: 1px solid var(--border);
++++++++++++	padding-top: 12px;
++++++++++++}
++++++++++++.cnav-count {
++++++++++++	color: var(--muted);
++++++++++++	font-size: 12px;
++++++++++++}
++++++++++++
++++++++++++/* ── 嵌入页（/custom/:id）── */
++++++++++++.cnav-page {
++++++++++++	display: flex;
++++++++++++	flex-direction: column;
++++++++++++	gap: 8px;
++++++++++++}
++++++++++++.cnav-toolbar {
++++++++++++	display: flex;
++++++++++++	align-items: center;
++++++++++++	gap: 8px;
++++++++++++}
++++++++++++.cnav-title {
++++++++++++	font-weight: 600;
++++++++++++	font-size: 14px;
++++++++++++	min-width: 0;
++++++++++++	overflow: hidden;
++++++++++++	text-overflow: ellipsis;
++++++++++++	white-space: nowrap;
++++++++++++}
++++++++++++.cnav-frame {
++++++++++++	width: 100%;
++++++++++++}
++++++++++++.cnav-frame iframe {
++++++++++++	width: 100%;
++++++++++++	height: calc(100vh - 150px);
++++++++++++	min-height: 480px;
++++++++++++	border: 1px solid var(--border);
++++++++++++	border-radius: var(--radius);
++++++++++++	background: #fff;
++++++++++++	display: block;
++++++++++++}
+++++++++++diff --git a/src/custom-nav/ui/store.ts b/src/custom-nav/ui/store.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..bb9a19a
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/store.ts
+++++++++++@@ -0,0 +1,27 @@
++++++++++++/**
++++++++++++ * 自定义导航 —— 模块级缓存
++++++++++++ *
++++++++++++ * 顶栏（CustomNav）与嵌入页（CustomNavPage）都会读同一份配置，
++++++++++++ * 用模块级 Promise 缓存避免重复请求；管理面板保存后写入新值。
++++++++++++ */
++++++++++++import type { CustomNavItem } from "../types";
++++++++++++import { navApi } from "./api";
++++++++++++
++++++++++++let cached: Promise<CustomNavItem[]> | null = null;
++++++++++++
++++++++++++export function getNavItems(force = false): Promise<CustomNavItem[]> {
++++++++++++	if (!cached || force) {
++++++++++++		cached = navApi.get().then((res) => res.items).catch((error) => {
++++++++++++			cached = null;
++++++++++++			throw error;
++++++++++++		});
++++++++++++	}
++++++++++++	return cached;
++++++++++++}
++++++++++++
++++++++++++/** 保存整表并更新缓存 */
++++++++++++export async function saveNavItems(items: CustomNavItem[]): Promise<CustomNavItem[]> {
++++++++++++	const saved = await navApi.put(items).then((res) => res.items);
++++++++++++	cached = Promise.resolve(saved);
++++++++++++	return saved;
++++++++++++}
+++++++++++diff --git a/src/custom-nav/ui/text.ts b/src/custom-nav/ui/text.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..0c837bb
+++++++++++--- /dev/null
++++++++++++++ b/src/custom-nav/ui/text.ts
+++++++++++@@ -0,0 +1,87 @@
++++++++++++/**
++++++++++++ * 自定义导航 —— 自包含双语文案
++++++++++++ *
++++++++++++ * 刻意不写进 src/shared/locales/zh.ts|en.ts：那些是上游文件，
++++++++++++ * 加文案会产生多余的升级冲突面。这里按当前语言取一份小字典即可。
++++++++++++ */
++++++++++++import type { ResolvedLanguage } from "../../shared/i18n";
++++++++++++
++++++++++++export interface NavText {
++++++++++++	manage: string;
++++++++++++	add: string;
++++++++++++	save: string;
++++++++++++	cancel: string;
++++++++++++	close: string;
++++++++++++	edit: string;
++++++++++++	delete: string;
++++++++++++	moveUp: string;
++++++++++++	moveDown: string;
++++++++++++	name: string;
++++++++++++	url: string;
++++++++++++	mode: string;
++++++++++++	embed: string;
++++++++++++	tab: string;
++++++++++++	namePlaceholder: string;
++++++++++++	urlPlaceholder: string;
++++++++++++	empty: string;
++++++++++++	notFound: string;
++++++++++++	openTab: string;
++++++++++++	nameRequired: string;
++++++++++++	invalidUrl: string;
++++++++++++	itemsCount: (n: number) => string;
++++++++++++}
++++++++++++
++++++++++++const DICT: { zh: NavText; en: NavText } = {
++++++++++++	zh: {
++++++++++++		manage: "管理菜单",
++++++++++++		add: "添加",
++++++++++++		save: "保存",
++++++++++++		cancel: "取消",
++++++++++++		close: "关闭",
++++++++++++		edit: "编辑",
++++++++++++		delete: "删除",
++++++++++++		moveUp: "上移",
++++++++++++		moveDown: "下移",
++++++++++++		name: "菜单名称",
++++++++++++		url: "页面地址",
++++++++++++		mode: "打开方式",
++++++++++++		embed: "嵌入当前页面",
++++++++++++		tab: "新标签打开",
++++++++++++		namePlaceholder: "例如：我的面板",
++++++++++++		urlPlaceholder: "https://example.com",
++++++++++++		empty: "还没有自定义菜单",
++++++++++++		notFound: "找不到该自定义菜单",
++++++++++++		openTab: "在新标签打开",
++++++++++++		nameRequired: "请输入菜单名称",
++++++++++++		invalidUrl: "请输入有效的 http(s) 地址",
++++++++++++		itemsCount: (n: number) => (n ? `共 ${n} 项` : ""),
++++++++++++	},
++++++++++++	en: {
++++++++++++		manage: "Manage menus",
++++++++++++		add: "Add",
++++++++++++		save: "Save",
++++++++++++		cancel: "Cancel",
++++++++++++		close: "Close",
++++++++++++		edit: "Edit",
++++++++++++		delete: "Delete",
++++++++++++		moveUp: "Move up",
++++++++++++		moveDown: "Move down",
++++++++++++		name: "Menu name",
++++++++++++		url: "Page URL",
++++++++++++		mode: "Open in",
++++++++++++		embed: "Embed in page",
++++++++++++		tab: "New tab",
++++++++++++		namePlaceholder: "e.g. My dashboard",
++++++++++++		urlPlaceholder: "https://example.com",
++++++++++++		empty: "No custom menus yet",
++++++++++++		notFound: "Custom menu not found",
++++++++++++		openTab: "Open in new tab",
++++++++++++		nameRequired: "Please enter a menu name",
++++++++++++		invalidUrl: "Please enter a valid http(s) URL",
++++++++++++		itemsCount: (n: number) => (n ? `${n} item(s)` : ""),
++++++++++++	},
++++++++++++} as const;
++++++++++++
++++++++++++export function navText(lang: ResolvedLanguage): NavText {
++++++++++++	return lang === "en" ? DICT.en : DICT.zh;
++++++++++++}
+++++++++++diff --git a/src/shared/api-types.ts b/src/shared/api-types.ts
+++++++++++index 4948846..703449d 100644
+++++++++++--- a/src/shared/api-types.ts
++++++++++++++ b/src/shared/api-types.ts
+++++++++++@@ -1,4 +1,5 @@
+++++++++++ import type { PublicSection } from "./public-sections";
++++++++++++import type { CostMethod } from "../trades/calc";
+++++++++++ 
+++++++++++ /**
+++++++++++  * 前后端共用的 API 数据结构
+++++++++++@@ -23,6 +24,8 @@ export interface AccountDto {
+++++++++++ 	note: string | null;
+++++++++++ 	created_at: string;
+++++++++++ 	updated_at: string;
++++++++++++	/** 成本口径：fifo（默认）/ weighted / diluted（独立功能 src/trades/） */
++++++++++++	cost_method: CostMethod;
+++++++++++ }
+++++++++++ 
+++++++++++ export interface HoldingDto {
+++++++++++@@ -45,6 +48,10 @@ export interface HoldingDto {
+++++++++++ 	note: string | null;
+++++++++++ 	created_at: string;
+++++++++++ 	updated_at: string;
++++++++++++	/** 交易驱动开关：1 = qty/avg_cost/realized_pnl 由交易流水推导（独立功能 src/trades/） */
++++++++++++	trade_mode?: number;
++++++++++++	/** 交易驱动持仓的累计已实现盈亏 */
++++++++++++	realized_pnl?: number | null;
+++++++++++ }
+++++++++++ 
+++++++++++ export interface HoldingListDto extends HoldingDto {
+++++++++++diff --git a/src/shared/labels.ts b/src/shared/labels.ts
+++++++++++index 6f00657..cd032a6 100644
+++++++++++--- a/src/shared/labels.ts
++++++++++++++ b/src/shared/labels.ts
+++++++++++@@ -8,6 +8,10 @@ export type AssetClass = (typeof ASSET_CLASSES)[number];
+++++++++++ export const ACCOUNT_KINDS = ["broker", "exchange", "cash"] as const;
+++++++++++ export type AccountKind = (typeof ACCOUNT_KINDS)[number];
+++++++++++ 
++++++++++++/** 成本口径（独立功能 src/trades/）：fifo = 先进先出 / weighted = 移动加权平均 / diluted = 摊薄成本 */
++++++++++++export const COST_METHODS = ["fifo", "weighted", "diluted"] as const;
++++++++++++export type CostMethodEnum = (typeof COST_METHODS)[number];
++++++++++++
+++++++++++ export const MARKETS = ["us", "hk", "cn", "crypto", "other"] as const;
+++++++++++ export type Market = (typeof MARKETS)[number];
+++++++++++ 
+++++++++++@@ -52,6 +56,11 @@ export function kindLabel(t: Translator, value: string): string {
+++++++++++ 	return t(`kind.${value}`);
+++++++++++ }
+++++++++++ 
++++++++++++/** 成本口径标签：costMethod.fifo / costMethod.weighted / costMethod.diluted */
++++++++++++export function costMethodLabel(t: Translator, value: string): string {
++++++++++++	return t(`costMethod.${value}`);
++++++++++++}
++++++++++++
+++++++++++ /** 市场标签：mkt.us / mkt.hk … */
+++++++++++ export function marketLabel(t: Translator, value: string): string {
+++++++++++ 	return t(`mkt.${value}`);
+++++++++++diff --git a/src/shared/locales/en.ts b/src/shared/locales/en.ts
+++++++++++index b214661..14bdc89 100644
+++++++++++--- a/src/shared/locales/en.ts
++++++++++++++ b/src/shared/locales/en.ts
+++++++++++@@ -162,6 +162,7 @@ const en: Dict = {
+++++++++++ 	"accounts.kind": "Type",
+++++++++++ 	"accounts.currency": "Currency",
+++++++++++ 	"accounts.market": "Market",
++++++++++++	"accounts.costMethod": "Cost method",
+++++++++++ 	"accounts.note": "Note (optional)",
+++++++++++ 	"accounts.icon": "Platform icon",
+++++++++++ 	"accounts.createSubmit": "Create account",
+++++++++++@@ -512,6 +513,9 @@ const en: Dict = {
+++++++++++ 	"kind.broker": "Broker",
+++++++++++ 	"kind.exchange": "Exchange",
+++++++++++ 	"kind.cash": "Cash account",
++++++++++++	"costMethod.fifo": "FIFO",
++++++++++++	"costMethod.weighted": "Weighted average",
++++++++++++	"costMethod.diluted": "Diluted cost",
+++++++++++ 	"mkt.us": "US",
+++++++++++ 	"mkt.hk": "Hong Kong",
+++++++++++ 	"mkt.cn": "China A",
+++++++++++@@ -695,6 +699,7 @@ const en: Dict = {
+++++++++++ 	"accounts.colKind": "Type",
+++++++++++ 	"accounts.colMarket": "Market",
+++++++++++ 	"accounts.colCurrency": "Currency",
++++++++++++	"accounts.colCostMethod": "Cost method",
+++++++++++ 	"history.dateFrom": "Start date",
+++++++++++ 	"history.dateTo": "End date",
+++++++++++ 	"history.filterFrom": "From",
+++++++++++diff --git a/src/shared/locales/zh.ts b/src/shared/locales/zh.ts
+++++++++++index 4336bf5..fc878c7 100644
+++++++++++--- a/src/shared/locales/zh.ts
++++++++++++++ b/src/shared/locales/zh.ts
+++++++++++@@ -162,6 +162,7 @@ const zh: Dict = {
+++++++++++ 	"accounts.kind": "类型",
+++++++++++ 	"accounts.currency": "币种",
+++++++++++ 	"accounts.market": "市场",
++++++++++++	"accounts.costMethod": "成本口径",
+++++++++++ 	"accounts.note": "备注（可选）",
+++++++++++ 	"accounts.icon": "平台图标",
+++++++++++ 	"accounts.createSubmit": "创建账户",
+++++++++++@@ -512,6 +513,9 @@ const zh: Dict = {
+++++++++++ 	"kind.broker": "券商",
+++++++++++ 	"kind.exchange": "加密平台",
+++++++++++ 	"kind.cash": "现金账户",
++++++++++++	"costMethod.fifo": "先进先出（FIFO）",
++++++++++++	"costMethod.weighted": "移动加权平均",
++++++++++++	"costMethod.diluted": "摊薄成本",
+++++++++++ 	"mkt.us": "美股",
+++++++++++ 	"mkt.hk": "港股",
+++++++++++ 	"mkt.cn": "A股",
+++++++++++@@ -695,6 +699,7 @@ const zh: Dict = {
+++++++++++ 	"accounts.colKind": "类型",
+++++++++++ 	"accounts.colMarket": "市场",
+++++++++++ 	"accounts.colCurrency": "币种",
++++++++++++	"accounts.colCostMethod": "成本口径",
+++++++++++ 	"history.dateFrom": "开始日期",
+++++++++++ 	"history.dateTo": "结束日期",
+++++++++++ 	"history.filterFrom": "开始",
+++++++++++diff --git a/src/shared/version.ts b/src/shared/version.ts
+++++++++++index bc74b1f..e0cafc7 100644
+++++++++++--- a/src/shared/version.ts
++++++++++++++ b/src/shared/version.ts
+++++++++++@@ -2,7 +2,7 @@
+++++++++++ export const APP_VERSION = "0.13.0";
+++++++++++ 
+++++++++++ /** 数据库结构版本（与 migrations 目录里的最新迁移对应；用于检测"库落后于代码"） */
+++++++++++-export const SCHEMA_VERSION = 6;
++++++++++++export const SCHEMA_VERSION = 8;
+++++++++++ 
+++++++++++ /** 备份文件格式版本；schema 不兼容变更时 +1 */
+++++++++++ export const BACKUP_SCHEMA_VERSION = 1;
+++++++++++diff --git a/src/trades/README.md b/src/trades/README.md
+++++++++++new file mode 100644
+++++++++++index 0000000..9ed6d04
+++++++++++--- /dev/null
++++++++++++++ b/src/trades/README.md
+++++++++++@@ -0,0 +1,44 @@
++++++++++++# 持仓交易流水（FIFO 成本）功能
++++++++++++
++++++++++++在独立目录 `src/trades/` 中实现，目的是在跟随上游仓库同步升级时，把与本功能相关的代码冲突面收敛到最小。
++++++++++++
++++++++++++## 功能概述
++++++++++++
++++++++++++- 按持仓开关：`holdings.trade_mode`（0=手动 / 1=交易驱动）。
++++++++++++- 开启后，持仓的 `qty` / `avg_cost` / `realized_pnl` 由交易流水按 **FIFO 逐笔法** 自动计算并锁定（不可手改）。
++++++++++++- 开启时若已有存量且无流水，自动插入一笔「开仓基准」买入（seed=1），保证成本平滑接续。
++++++++++++- 未开启时维持原有手动模式，不受影响。
++++++++++++
++++++++++++## 文件组成
++++++++++++
++++++++++++| 文件 | 说明 |
++++++++++++| --- | --- |
++++++++++++| `src/trades/calc.ts` | 纯函数 FIFO 核算（无 D1/框架依赖，可独立单测） |
++++++++++++| `src/trades/repo.ts` | D1 读写、开仓基准、交易 → holdings 同步写回 |
++++++++++++| `src/trades/routes.ts` | Hono 子路由，挂载于 `/api/holdings/:id/trades` |
++++++++++++| `src/trades/ui/api.ts` | 自包含前端 API 客户端 |
++++++++++++| `src/trades/ui/TradesPage.tsx` | 交易管理页（路由 `/trades/:holdingId`） |
++++++++++++| `migrations/0008_trades.sql` | 追加式迁移：trades 表 + holdings 扩展列 + schema_version=7 |
++++++++++++| `tests/trades/calc.test.ts` | FIFO 单测 |
++++++++++++
++++++++++++## 接线点（上游同步后需核对，丢失则重新应用）
++++++++++++
++++++++++++1. `src/shared/version.ts` — `SCHEMA_VERSION` 升到 7（与 0008 迁移的 schema_version 对应）。
++++++++++++2. `src/worker/api/index.ts` — 挂载交易子路由（约 1 行）。
++++++++++++3. `src/worker/api/holdings.routes.ts` — PATCH 锁定栅栏：交易驱动时禁止手改 qty/avg_cost（见该文件内注释）。
++++++++++++4. `src/worker/types.ts` — `HoldingRow` 增加 `trade_mode`、`realized_pnl` 字段。
++++++++++++5. `src/shared/api-types.ts` — `HoldingDto` / `HoldingListDto` 增加对应可选字段。
++++++++++++6. `src/web/App.tsx` — lazy 引入 `TradesPage` + 路由分发（`/trades/*`）。
++++++++++++7. `src/web/pages/Holdings.tsx` — 持仓行增加「交易」入口按钮。
++++++++++++
++++++++++++> 注意：`holdings.routes.ts` 第 125 行附近的锁定栅栏若被上游重写丢失，需按本 README 重新应用。
++++++++++++
++++++++++++## 验证
++++++++++++
++++++++++++```bash
++++++++++++npm run lint                       # 4 个 tsconfig 全绿
++++++++++++npm run build                      # vite build 成功
++++++++++++npx vitest run --maxWorkers=1      # 全部测试（含 calc.test.ts）
++++++++++++```
++++++++++++
++++++++++++Windows 本地 `npm run build` 的 prebuild `check:env` 会因 workerd 平台包命名误报失败（上游脚本 bug，Linux CI 正常），可直接 `npx vite build` 验证。
+++++++++++diff --git a/src/trades/calc.ts b/src/trades/calc.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..3015381
+++++++++++--- /dev/null
++++++++++++++ b/src/trades/calc.ts
+++++++++++@@ -0,0 +1,323 @@
++++++++++++/**
++++++++++++ * 逐笔成本核算（多口径）—— 纯函数，无任何 I/O / 框架依赖，可独立单测。
++++++++++++ *
++++++++++++ * 支持三种口径（由持仓所属账户的 cost_method 决定，账户下所有持仓统一跟随）：
++++++++++++ *   - fifo     先进先出：每次买入一个批次，卖出按时间序先消耗最早批次。
++++++++++++ *              剩余成本、平均成本、已实现盈亏三者可独立核算（最专业、适合记账）。
++++++++++++ *   - weighted 移动加权平均：只按买入做加权，卖出不改变均价；
++++++++++++ *              已实现盈亏 = Σ(卖出净额 − 卖出量 × 当时加权均价)。
++++++++++++ *              很多海外券商的口径。
++++++++++++ *   - diluted  摊薄成本：avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前持有数量。
++++++++++++ *              卖出会影响成本；已实现盈亏已融入成本，恒为 0（数学自洽，再算即双重计算）。
++++++++++++ *              国内券商最常见的口径。
++++++++++++ *
++++++++++++ * 与主程序的隔离约定：
++++++++++++ *   - 本模块只读"交易流水"，不直接读写数据库；
++++++++++++ *   - 所有数量 / 单价 / 手续费按**交易币种**计（汇率由主程序统一折算）；
++++++++++++ *   - 同一持仓的流水按 (traded_at, id) 稳定排序后逐笔处理。
++++++++++++ */
++++++++++++
++++++++++++/** 计算模块能接受的最小交易形状（repo 层把 D1 行映射成它，测试直接构造它） */
++++++++++++export interface TradeLike {
++++++++++++	id: string;
++++++++++++	/** 买入 / 卖出 */
++++++++++++	side: "buy" | "sell";
++++++++++++	/** 成交数量 */
++++++++++++	qty: number;
++++++++++++	/** 成交单价（不含手续费） */
++++++++++++	price: number;
++++++++++++	/** 手续费：买入加进该批成本，卖出从收入中扣除 */
++++++++++++	fee: number;
++++++++++++	/** 交易日 YYYY-MM-DD */
++++++++++++	traded_at: string;
++++++++++++	/** 备注（不影响计算，仅透传展示） */
++++++++++++	note?: string | null;
++++++++++++	/** 是否为开启 trade_mode 时自动生成的开仓基准买入（不影响计算，只用于展示） */
++++++++++++	seed?: boolean;
++++++++++++}
++++++++++++
++++++++++++/** 尚未被卖出的批次（剩余） */
++++++++++++export interface RemainingLot {
++++++++++++	/** 来源买入交易 id（seed 基准批为 "seed:<holdingId>"） */
++++++++++++	tradeId: string;
++++++++++++	/** 剩余数量 */
++++++++++++	qty: number;
++++++++++++	/** 剩余总成本（含该批买入时摊的手续费） */
++++++++++++	cost: number;
++++++++++++	/** 该批买入成交单价（展示用） */
++++++++++++	price: number;
++++++++++++	/** 是否开仓基准批 */
++++++++++++	seed: boolean;
++++++++++++}
++++++++++++
++++++++++++/** 成本口径：fifo（先进先出）/ weighted（移动加权平均）/ diluted（摊薄成本） */
++++++++++++export type CostMethod = "fifo" | "weighted" | "diluted";
++++++++++++
++++++++++++/** 逐笔计算的结果：剩余批次 + 汇总 + 已实现盈亏 */
++++++++++++export interface CostState {
++++++++++++	/** 本次计算采用的口径 */
++++++++++++	method: CostMethod;
++++++++++++	/** 剩余批次（仅 FIFO 有实际内容；weighted / diluted 为空数组，界面据此隐藏批次透视） */
++++++++++++	lots: RemainingLot[];
++++++++++++	/** 剩余总数量 */
++++++++++++	qty: number;
++++++++++++	/** 剩余成本（含剩余批次的手续费；weighted/diluted = qty × avgCost） */
++++++++++++	cost: number;
++++++++++++	/** 平均成本 = 剩余成本 / 剩余数量（无持仓时为 null；diluted 清仓后也置空显示 —） */
++++++++++++	avgCost: number | null;
++++++++++++	/** 累计已实现盈亏（diluted 恒为 0：盈亏已融入成本） */
++++++++++++	realizedPnl: number;
++++++++++++	/** 全部卖出的净收入合计（含手续费扣减），对账展示用 */
++++++++++++	soldProceeds: number;
++++++++++++	/** 累计卖出数量 */
++++++++++++	soldQty: number;
++++++++++++	/** 卖出数量超出剩余持仓的部分（正常流程为 0；>0 时路由层应拒绝该变更） */
++++++++++++	oversoldQty: number;
++++++++++++}
++++++++++++
++++++++++++const EPS = 1e-9;
++++++++++++
++++++++++++function nearZero(value: number): boolean {
++++++++++++	return Math.abs(value) < EPS;
++++++++++++}
++++++++++++
++++++++++++/** 稳定排序：先交易日，再交易 id（保证同一日多笔的顺序可复现） */
++++++++++++function sortTrades(trades: TradeLike[]): TradeLike[] {
++++++++++++	return [...trades].sort(
++++++++++++		(a, b) => a.traded_at.localeCompare(b.traded_at) || a.id.localeCompare(b.id),
++++++++++++	);
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 用 FIFO 逐笔法核算一组交易流水。
++++++++++++ *
++++++++++++ * @param trades 同一持仓的全部交易（未排序也可以，内部会稳定排序）
++++++++++++ * @returns 剩余批次、平均成本、已实现盈亏等汇总
++++++++++++ */
++++++++++++export function computeFifo(trades: TradeLike[]): CostState {
++++++++++++	const lots: RemainingLot[] = [];
++++++++++++	let realizedPnl = 0;
++++++++++++	let soldProceeds = 0;
++++++++++++	let soldQty = 0;
++++++++++++	let oversoldQty = 0;
++++++++++++
++++++++++++	for (const trade of sortTrades(trades)) {
++++++++++++		if (trade.side === "buy") {
++++++++++++			// 买入：整笔作为一批（成本 = 数量×单价 + 手续费）
++++++++++++			const cost = trade.qty * trade.price + trade.fee;
++++++++++++			lots.push({
++++++++++++				tradeId: trade.id,
++++++++++++				qty: trade.qty,
++++++++++++				cost,
++++++++++++				price: trade.price,
++++++++++++				seed: Boolean(trade.seed),
++++++++++++			});
++++++++++++			continue;
++++++++++++		}
++++++++++++
++++++++++++		// 卖出：从最早的批次开始消耗（FIFO）
++++++++++++		let remaining = trade.qty;
++++++++++++		// 净收入按"卖出的数量占比"分到各被消耗的批次上，手续费已在净收入里
++++++++++++		const netProceeds = trade.qty * trade.price - trade.fee;
++++++++++++		while (remaining > EPS && lots.length > 0) {
++++++++++++			const lot = lots[0];
++++++++++++			const consumed = Math.min(lot.qty, remaining);
++++++++++++			const consumedFullLot = nearZero(lot.qty - consumed);
++++++++++++
++++++++++++			// 被消耗批次的成本：整批消耗直接取整批成本；部分消耗按数量比例分摊
++++++++++++			const allocatedCost = consumedFullLot ? lot.cost : lot.cost * (consumed / lot.qty);
++++++++++++			// 这笔卖出里，属于"当前消耗批次"的那部分净收入
++++++++++++			const allocatedProceeds = netProceeds * (consumed / trade.qty);
++++++++++++
++++++++++++			realizedPnl += allocatedProceeds - allocatedCost;
++++++++++++			lot.qty -= consumed;
++++++++++++			lot.cost -= allocatedCost;
++++++++++++			if (nearZero(lot.qty)) lots.shift();
++++++++++++
++++++++++++			remaining -= consumed;
++++++++++++			soldQty += consumed;
++++++++++++			soldProceeds += allocatedProceeds;
++++++++++++		}
++++++++++++
++++++++++++		if (remaining > EPS) {
++++++++++++			// 卖出量超过剩余持仓：记录超额（路由层会拒绝，这里只是不崩溃）
++++++++++++			oversoldQty += remaining;
++++++++++++			soldQty += remaining;
++++++++++++			soldProceeds += netProceeds * (remaining / trade.qty);
++++++++++++		}
++++++++++++	}
++++++++++++
++++++++++++	const qty = lots.reduce((sum, lot) => sum + lot.qty, 0);
++++++++++++	const cost = lots.reduce((sum, lot) => sum + lot.cost, 0);
++++++++++++
++++++++++++	return {
++++++++++++		method: "fifo",
++++++++++++		lots,
++++++++++++		qty,
++++++++++++		cost,
++++++++++++		avgCost: qty > EPS ? cost / qty : null,
++++++++++++		realizedPnl,
++++++++++++		soldProceeds,
++++++++++++		soldQty,
++++++++++++		oversoldQty,
++++++++++++	};
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 移动加权平均（只按买入加权，卖出不改变均价）。
++++++++++++ *
++++++++++++ * 规则：
++++++++++++ *   - 买入：新均价 = (旧量×旧均价 + 本次买入含费) ÷ 新量；
++++++++++++ *   - 卖出：均价不动，已实现盈亏 += 卖出净额 − 卖出量×当时均价；数量减少；
++++++++++++ *   - 清仓（qty=0）后均价置空，下一次买入从该笔重新起算。
++++++++++++ */
++++++++++++export function computeWeighted(trades: TradeLike[]): CostState {
++++++++++++	let qty = 0;
++++++++++++	let avgCost: number | null = null;
++++++++++++	let realizedPnl = 0;
++++++++++++	let soldProceeds = 0;
++++++++++++	let soldQty = 0;
++++++++++++	let oversoldQty = 0;
++++++++++++
++++++++++++	for (const trade of sortTrades(trades)) {
++++++++++++		if (trade.side === "buy") {
++++++++++++			const buyAmount = trade.qty * trade.price + trade.fee;
++++++++++++			if (qty > EPS) {
++++++++++++				avgCost = (qty * avgCost! + buyAmount) / (qty + trade.qty);
++++++++++++			} else {
++++++++++++				avgCost = buyAmount / trade.qty;
++++++++++++			}
++++++++++++			qty += trade.qty;
++++++++++++			continue;
++++++++++++		}
++++++++++++
++++++++++++		// 卖出：只消耗手上有的部分，均价不变
++++++++++++		let remaining = trade.qty;
++++++++++++		if (qty > EPS) {
++++++++++++			const consumed = Math.min(qty, remaining);
++++++++++++			// 净收入按比例分摊，手续费包含在净收入里
++++++++++++			const allocatedProceeds = (trade.qty * trade.price - trade.fee) * (consumed / trade.qty);
++++++++++++			realizedPnl += allocatedProceeds - consumed * avgCost!;
++++++++++++			qty -= consumed;
++++++++++++			remaining -= consumed;
++++++++++++			soldQty += consumed;
++++++++++++			soldProceeds += allocatedProceeds;
++++++++++++			if (nearZero(qty)) avgCost = null;
++++++++++++		}
++++++++++++
++++++++++++		if (remaining > EPS) {
++++++++++++			oversoldQty += remaining;
++++++++++++			soldQty += remaining;
++++++++++++			soldProceeds += (trade.qty * trade.price - trade.fee) * (remaining / trade.qty);
++++++++++++		}
++++++++++++	}
++++++++++++
++++++++++++	return {
++++++++++++		method: "weighted",
++++++++++++		lots: [],
++++++++++++		qty,
++++++++++++		cost: qty > EPS && avgCost !== null ? qty * avgCost : 0,
++++++++++++		avgCost,
++++++++++++		realizedPnl,
++++++++++++		soldProceeds,
++++++++++++		soldQty,
++++++++++++		oversoldQty,
++++++++++++	};
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 摊薄成本法。
++++++++++++ *
++++++++++++ * avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前持有数量
++++++++++++ *   - 买入：累计买入金额 += 数量×单价 + 手续费；
++++++++++++ *   - 卖出：累计卖出净额 += 数量×单价 − 手续费；数量减少，成本被"摊薄"；
++++++++++++ *   - 已实现盈亏恒为 0（盈亏已融入剩余成本，再算即双重计算）；
++++++++++++ *   - 清仓（qty=0）后均价置空显示 —。
++++++++++++ */
++++++++++++export function computeDiluted(trades: TradeLike[]): CostState {
++++++++++++	let qty = 0;
++++++++++++	let totalBuy = 0; // Σ买入含费
++++++++++++	let totalSell = 0; // Σ卖出净额（含手续费扣减）
++++++++++++	let soldProceeds = 0;
++++++++++++	let soldQty = 0;
++++++++++++	let oversoldQty = 0;
++++++++++++
++++++++++++	for (const trade of sortTrades(trades)) {
++++++++++++		if (trade.side === "buy") {
++++++++++++			totalBuy += trade.qty * trade.price + trade.fee;
++++++++++++			qty += trade.qty;
++++++++++++			continue;
++++++++++++		}
++++++++++++
++++++++++++		// 卖出：只消耗手上有的部分（正常流程由 checkTradeValid 保证不会卖超）
++++++++++++		const netProceeds = trade.qty * trade.price - trade.fee;
++++++++++++		const consumed = Math.min(qty, trade.qty);
++++++++++++		if (consumed > EPS) {
++++++++++++			totalSell += netProceeds * (consumed / trade.qty);
++++++++++++			qty -= consumed;
++++++++++++			soldQty += consumed;
++++++++++++			soldProceeds += netProceeds * (consumed / trade.qty);
++++++++++++		}
++++++++++++		const remaining = trade.qty - consumed;
++++++++++++		if (remaining > EPS) {
++++++++++++			oversoldQty += remaining;
++++++++++++			soldQty += remaining;
++++++++++++			soldProceeds += netProceeds * (remaining / trade.qty);
++++++++++++		}
++++++++++++	}
++++++++++++
++++++++++++	const cost = qty > EPS ? totalBuy - totalSell : 0;
++++++++++++	return {
++++++++++++		method: "diluted",
++++++++++++		lots: [],
++++++++++++		qty,
++++++++++++		cost,
++++++++++++		avgCost: qty > EPS ? cost / qty : null,
++++++++++++		realizedPnl: 0,
++++++++++++		soldProceeds,
++++++++++++		soldQty,
++++++++++++		oversoldQty,
++++++++++++	};
++++++++++++}
++++++++++++
++++++++++++/** 按指定口径核算一组交易流水。 */
++++++++++++export function computeState(trades: TradeLike[], method: CostMethod): CostState {
++++++++++++	switch (method) {
++++++++++++		case "weighted":
++++++++++++			return computeWeighted(trades);
++++++++++++		case "diluted":
++++++++++++			return computeDiluted(trades);
++++++++++++		case "fifo":
++++++++++++		default:
++++++++++++			return computeFifo(trades);
++++++++++++	}
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 校验一条将要写入/删除的交易不会破坏"卖出不超持仓"约束（与成本口径无关）。
++++++++++++ *
++++++++++++ * 场景：用户新增/修改/删除一笔交易时，可能造成"卖出量 > 剩余持仓"。
++++++++++++ * 做法：先从当前流水中去掉目标交易 targetId，再加入替换后的 next（若为 null 即删除），
++++++++++++ * 重算一遍 FIFO（卖超量对所有口径一致），一旦出现超额卖出即拒绝；新增交易时 targetId 不在 current 中，等价于直接追加。
++++++++++++ *
++++++++++++ * @param current 当前全部流水（含将被增改删的目标交易）
++++++++++++ * @param targetId 将被替换/删除的交易 id（新增时传入新生成的 id，不在 current 中即可）
++++++++++++ * @param next 替换后的同一条交易；null 表示删除该交易
++++++++++++ * @returns 通过返回 null；不通过返回中文原因
++++++++++++ */
++++++++++++export function checkTradeValid(
++++++++++++	current: TradeLike[],
++++++++++++	targetId: string,
++++++++++++	next: TradeLike | null,
++++++++++++): string | null {
++++++++++++	const rest = current.filter((trade) => trade.id !== targetId);
++++++++++++	const patched = next ? [...rest, next] : rest;
++++++++++++	if (next && next.qty <= EPS) {
++++++++++++		return "交易数量必须大于 0";
++++++++++++	}
++++++++++++	const state = computeFifo(patched);
++++++++++++	if (state.oversoldQty > EPS) {
++++++++++++		return "交易调整后卖出数量将超过剩余持仓，请先核对交易流水";
++++++++++++	}
++++++++++++	return null;
++++++++++++}
+++++++++++diff --git a/src/trades/repo.ts b/src/trades/repo.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..7706f5d
+++++++++++--- /dev/null
++++++++++++++ b/src/trades/repo.ts
+++++++++++@@ -0,0 +1,266 @@
++++++++++++import type { HoldingRow } from "../worker/types";
++++++++++++import { newId, nowIso } from "../worker/core/utils";
++++++++++++import { checkTradeValid, computeState, type CostMethod, type TradeLike } from "./calc";
++++++++++++
++++++++++++/**
++++++++++++ * 交易流水仓储层 —— 包含 D1 读写、开仓基准、以及"交易 → holdings 同步写回"。
++++++++++++ */
++++++++++++
++++++++++++/** holdings.trade_mode 值 */
++++++++++++export const TRADE_MODE_OFF = 0;
++++++++++++export const TRADE_MODE_ON = 1;
++++++++++++
++++++++++++export interface TradeRow extends TradeLike {
++++++++++++	id: string;
++++++++++++	holding_id: string;
++++++++++++	created_at: string;
++++++++++++	updated_at: string;
++++++++++++}
++++++++++++
++++++++++++/** D1 行 → 计算层形状（附带持有 id 等冗余字段供路由透传） */
++++++++++++export function toTradeLike(row: {
++++++++++++	id: string;
++++++++++++	side: string;
++++++++++++	qty: number;
++++++++++++	price: number;
++++++++++++	fee?: number | null;
++++++++++++	seed?: number | null;
++++++++++++	note?: string | null;
++++++++++++	traded_at: string;
++++++++++++}): TradeLike {
++++++++++++	return {
++++++++++++		id: row.id,
++++++++++++		side: row.side === "sell" ? "sell" : "buy",
++++++++++++		qty: row.qty,
++++++++++++		price: row.price,
++++++++++++		fee: row.fee ?? 0,
++++++++++++		traded_at: row.traded_at,
++++++++++++		seed: (row.seed ?? 0) === 1,
++++++++++++		note: row.note ?? null,
++++++++++++	};
++++++++++++}
++++++++++++
++++++++++++export async function listTrades(db: D1Database, holdingId: string): Promise<TradeLike[]> {
++++++++++++	const { results } = await db
++++++++++++		.prepare(
++++++++++++			`SELECT id, side, qty, price, fee, seed, note, traded_at FROM trades
++++++++++++			 WHERE holding_id = ? ORDER BY traded_at ASC, id ASC`,
++++++++++++		)
++++++++++++		.bind(holdingId)
++++++++++++		.all<{
++++++++++++			id: string;
++++++++++++			side: string;
++++++++++++			qty: number;
++++++++++++			price: number;
++++++++++++			fee: number | null;
++++++++++++			seed: number | null;
++++++++++++			note: string | null;
++++++++++++			traded_at: string;
++++++++++++		}>();
++++++++++++	return (results ?? []).map(toTradeLike);
++++++++++++}
++++++++++++
++++++++++++export async function getTrade(db: D1Database, id: string): Promise<TradeRow | null> {
++++++++++++	return db.prepare(`SELECT * FROM trades WHERE id = ?`).bind(id).first<TradeRow>();
++++++++++++}
++++++++++++
++++++++++++export interface TradeInput {
++++++++++++	holding_id: string;
++++++++++++	side: "buy" | "sell";
++++++++++++	qty: number;
++++++++++++	price: number;
++++++++++++	fee?: number;
++++++++++++	traded_at: string;
++++++++++++	note?: string | null;
++++++++++++}
++++++++++++
++++++++++++/** 校验并写入一笔新交易；成功后同步回写持仓。返回新交易 + 变更后的持仓。 */
++++++++++++export async function createTrade(
++++++++++++	db: D1Database,
++++++++++++	holdingId: string,
++++++++++++	input: Omit<TradeInput, "holding_id">,
++++++++++++): Promise<{ trade: TradeRow; holding: HoldingRow }> {
++++++++++++	const holding = await db
++++++++++++		.prepare(`SELECT * FROM holdings WHERE id = ?`)
++++++++++++		.bind(holdingId)
++++++++++++		.first<HoldingRow>();
++++++++++++	if (!holding) throw new Error("HOLDING_NOT_FOUND");
++++++++++++
++++++++++++	const id = newId();
++++++++++++	const candidate: TradeLike = {
++++++++++++		id,
++++++++++++		side: input.side,
++++++++++++		qty: input.qty,
++++++++++++		price: input.price,
++++++++++++		fee: input.fee ?? 0,
++++++++++++		traded_at: input.traded_at,
++++++++++++	};
++++++++++++
++++++++++++	const existing = await listTrades(db, holdingId);
++++++++++++	// 新增交易时若卖超即拒绝
++++++++++++	const invalid = checkTradeValid(existing, id, candidate);
++++++++++++	if (invalid) throw new Error(`INVALID_TRADE:${invalid}`);
++++++++++++
++++++++++++	const now = nowIso();
++++++++++++	await db
++++++++++++		.prepare(
++++++++++++			`INSERT INTO trades (id, holding_id, side, qty, price, fee, seed, traded_at, note, created_at, updated_at)
++++++++++++			 VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
++++++++++++		)
++++++++++++		.bind(id, holdingId, input.side, input.qty, input.price, input.fee ?? 0, input.traded_at, input.note ?? null, now, now)
++++++++++++		.run();
++++++++++++
++++++++++++	const trade = (await getTrade(db, id))!;
++++++++++++	const synced = await recomputeHolding(db, holdingId);
++++++++++++	return { trade, holding: synced };
++++++++++++}
++++++++++++
++++++++++++/** 校验并更新一笔交易；成功后同步回写持仓。 */
++++++++++++export async function updateTrade(
++++++++++++	db: D1Database,
++++++++++++	holdingId: string,
++++++++++++	tradeId: string,
++++++++++++	patch: Partial<Pick<TradeInput, "side" | "qty" | "price" | "fee" | "traded_at" | "note">>,
++++++++++++): Promise<HoldingRow> {
++++++++++++	const current = await getTrade(db, tradeId);
++++++++++++	if (!current) throw new Error("TRADE_NOT_FOUND");
++++++++++++
++++++++++++	const next: TradeLike = {
++++++++++++		id: tradeId,
++++++++++++		side: patch.side ?? current.side,
++++++++++++		qty: patch.qty ?? current.qty,
++++++++++++		price: patch.price ?? current.price,
++++++++++++		fee: patch.fee ?? current.fee ?? 0,
++++++++++++		traded_at: patch.traded_at ?? current.traded_at,
++++++++++++	};
++++++++++++
++++++++++++	const existing = await listTrades(db, holdingId);
++++++++++++	const invalid = checkTradeValid(existing, tradeId, next);
++++++++++++	if (invalid) throw new Error(`INVALID_TRADE:${invalid}`);
++++++++++++
++++++++++++	const now = nowIso();
++++++++++++	await db
++++++++++++		.prepare(
++++++++++++			`UPDATE trades SET side = ?, qty = ?, price = ?, fee = ?, traded_at = ?, note = ?, updated_at = ?
++++++++++++			 WHERE id = ?`,
++++++++++++		)
++++++++++++		.bind(next.side, next.qty, next.price, next.fee, next.traded_at, patch.note === undefined ? current.note : patch.note, now, tradeId)
++++++++++++		.run();
++++++++++++
++++++++++++	return recomputeHolding(db, holdingId);
++++++++++++}
++++++++++++
++++++++++++/** 删除一笔交易；成功后同步回写持仓。 */
++++++++++++export async function deleteTrade(db: D1Database, holdingId: string, tradeId: string): Promise<HoldingRow> {
++++++++++++	const current = await getTrade(db, tradeId);
++++++++++++	if (!current) throw new Error("TRADE_NOT_FOUND");
++++++++++++
++++++++++++	const existing = await listTrades(db, holdingId);
++++++++++++	const invalid = checkTradeValid(existing, tradeId, null);
++++++++++++	if (invalid) throw new Error(`INVALID_TRADE:${invalid}`);
++++++++++++
++++++++++++	await db.prepare(`DELETE FROM trades WHERE id = ?`).bind(tradeId).run();
++++++++++++	return recomputeHolding(db, holdingId);
++++++++++++}
++++++++++++
++++++++++++/** 读取账户的成本口径（默认 fifo；老库迁移前没这个列时也回退 fifo） */
++++++++++++export async function accountCostMethod(db: D1Database, accountId: string): Promise<CostMethod> {
++++++++++++	const row = await db
++++++++++++		.prepare(`SELECT cost_method FROM accounts WHERE id = ?`)
++++++++++++		.bind(accountId)
++++++++++++		.first<{ cost_method: CostMethod | null }>();
++++++++++++	const method = row?.cost_method;
++++++++++++	return method === "weighted" || method === "diluted" ? method : "fifo";
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 用持仓的全部交易按"所属账户的成本口径"重算，并把 qty / avg_cost / realized_pnl 写回 holdings。
++++++++++++ * 无交易时：qty 归 0、avg_cost 置空、realized_pnl 归 0。
++++++++++++ */
++++++++++++export async function recomputeHolding(db: D1Database, holdingId: string): Promise<HoldingRow> {
++++++++++++	const holding = await db
++++++++++++		.prepare(`SELECT account_id FROM holdings WHERE id = ?`)
++++++++++++		.bind(holdingId)
++++++++++++		.first<{ account_id: string }>();
++++++++++++	if (!holding) throw new Error("HOLDING_NOT_FOUND");
++++++++++++
++++++++++++	const method = await accountCostMethod(db, holding.account_id);
++++++++++++	const trades = await listTrades(db, holdingId);
++++++++++++	const state = computeState(trades, method);
++++++++++++
++++++++++++	const qty = state.qty;
++++++++++++	const avgCost = state.avgCost === null ? null : roundMoney(state.avgCost);
++++++++++++	const realized = roundMoney(state.realizedPnl);
++++++++++++	const now = nowIso();
++++++++++++	await db
++++++++++++		.prepare(
++++++++++++			`UPDATE holdings SET qty = ?, avg_cost = ?, realized_pnl = ?, updated_at = ? WHERE id = ?`,
++++++++++++		)
++++++++++++		.bind(qty, avgCost, realized, now, holdingId)
++++++++++++		.run();
++++++++++++
++++++++++++	const row = await db.prepare(`SELECT * FROM holdings WHERE id = ?`).bind(holdingId).first<HoldingRow>();
++++++++++++	if (!row) throw new Error("HOLDING_NOT_FOUND");
++++++++++++	return row;
++++++++++++}
++++++++++++
++++++++++++/** 账户切换成本口径后，把它名下所有"交易驱动"持仓按新口径全部重算。 */
++++++++++++export async function recomputeByAccount(db: D1Database, accountId: string): Promise<void> {
++++++++++++	const { results } = await db
++++++++++++		.prepare(`SELECT id FROM holdings WHERE account_id = ? AND trade_mode = 1`)
++++++++++++		.bind(accountId)
++++++++++++		.all<{ id: string }>();
++++++++++++	for (const row of results ?? []) {
++++++++++++		await recomputeHolding(db, row.id);
++++++++++++	}
++++++++++++}
++++++++++++
++++++++++++/**
++++++++++++ * 开启某持仓的「交易驱动」模式。
++++++++++++ *   1. 若该持仓已有存量（qty>0）且当前还没有任何交易，自动补一笔「开仓基准」买入，
++++++++++++ *      成本单价取既有 avg_cost（无则用现价），保证切换到流水后成本不跳变、可平滑接续。
++++++++++++ *   2. 置 trade_mode=1 并按现有交易重算一次 holdings。
++++++++++++ * 开启操作幂等：已开启时直接返回。
++++++++++++ */
++++++++++++export async function enableTradeMode(db: D1Database, holdingId: string): Promise<HoldingRow> {
++++++++++++	const holding = await db.prepare(`SELECT * FROM holdings WHERE id = ?`).bind(holdingId).first<HoldingRow>();
++++++++++++	if (!holding) throw new Error("HOLDING_NOT_FOUND");
++++++++++++	if (holding.trade_mode === TRADE_MODE_ON) return recomputeHolding(db, holdingId);
++++++++++++
++++++++++++	const existing = await listTrades(db, holdingId);
++++++++++++	if (existing.length === 0 && holding.qty > 0) {
++++++++++++		const price = holding.avg_cost ?? holding.price;
++++++++++++		const seedId = `seed:${holdingId}`;
++++++++++++		const now = nowIso();
++++++++++++		await db
++++++++++++			.prepare(
++++++++++++				`INSERT INTO trades (id, holding_id, side, qty, price, fee, seed, traded_at, note, created_at, updated_at)
++++++++++++				 VALUES (?, ?, 'buy', ?, ?, 0, 1, ?, '开仓基准（切换自原持仓）', ?, ?)`,
++++++++++++			)
++++++++++++			.bind(seedId, holdingId, holding.qty, price, (holding.created_at ?? now).slice(0, 10), now, now)
++++++++++++			.run();
++++++++++++	}
++++++++++++
++++++++++++	await db
++++++++++++		.prepare(`UPDATE holdings SET trade_mode = ?, updated_at = ? WHERE id = ?`)
++++++++++++		.bind(TRADE_MODE_ON, nowIso(), holdingId)
++++++++++++		.run();
++++++++++++	await recomputeHolding(db, holdingId);
++++++++++++	const row = await db.prepare(`SELECT * FROM holdings WHERE id = ?`).bind(holdingId).first<HoldingRow>();
++++++++++++	if (!row) throw new Error("HOLDING_NOT_FOUND");
++++++++++++	return row;
++++++++++++}
++++++++++++
++++++++++++/** 关闭「交易驱动」：置回手动，保留已算出的 qty/avg_cost（不再随流水变化），不清空交易记录。 */
++++++++++++export async function disableTradeMode(db: D1Database, holdingId: string): Promise<HoldingRow> {
++++++++++++	const holding = await db.prepare(`SELECT * FROM holdings WHERE id = ?`).bind(holdingId).first<HoldingRow>();
++++++++++++	if (!holding) throw new Error("HOLDING_NOT_FOUND");
++++++++++++	// 关闭时以当前已算出的持仓量为基准：先重算一次冻结，再置 AUTO 关闭
++++++++++++	const frozen = await recomputeHolding(db, holdingId);
++++++++++++	await db.prepare(`UPDATE holdings SET trade_mode = ? , updated_at = ? WHERE id = ?`).bind(TRADE_MODE_OFF, nowIso(), holdingId).run();
++++++++++++	return { ...frozen, trade_mode: TRADE_MODE_OFF };
++++++++++++}
++++++++++++
++++++++++++export function roundMoney(value: number): number {
++++++++++++	return Math.round(value * 1e6) / 1e6;
++++++++++++}
+++++++++++\ No newline at end of file
+++++++++++diff --git a/src/trades/routes.ts b/src/trades/routes.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..63513fb
+++++++++++--- /dev/null
++++++++++++++ b/src/trades/routes.ts
+++++++++++@@ -0,0 +1,159 @@
++++++++++++import { Hono } from "hono";
++++++++++++import type { AppEnv } from "../worker/types";
++++++++++++import { badRequest, notFound, ok } from "../worker/core/errors";
++++++++++++import { tOf } from "../worker/core/i18n";
++++++++++++import { writeAudit } from "../worker/core/audit";
++++++++++++import {
++++++++++++	asRecord,
++++++++++++	optionalNumber,
++++++++++++	optionalString,
++++++++++++	requireId,
++++++++++++	requireNumber,
++++++++++++	requireOneOf,
++++++++++++	requireString,
++++++++++++} from "../worker/api/validate";
++++++++++++import { getAccount, getHolding } from "../worker/data/accounts.repo";
++++++++++++import {
++++++++++++	createTrade,
++++++++++++	deleteTrade,
++++++++++++	disableTradeMode,
++++++++++++	enableTradeMode,
++++++++++++	listTrades,
++++++++++++	updateTrade,
++++++++++++} from "./repo";
++++++++++++import { computeState, type CostMethod } from "./calc";
++++++++++++
++++++++++++/**
++++++++++++ * 持仓交易流水路由（独立功能，挂在 /api/holdings/:id/trades）
++++++++++++ *
++++++++++++ * 所有变更操作都会：校验 FIFO 约束 → 落库 → 重算并写回 holdings.qty/avg_cost/realized_pnl。
++++++++++++ * 只对开启 trade_mode 的持仓生效；未开启时允许读流水、允许写（供先录入后开启）。
++++++++++++ */
++++++++++++const trades = new Hono<AppEnv>();
++++++++++++
++++++++++++const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
++++++++++++
++++++++++++/** 解析请求体 → 交易字段（side/qty/price/fee/tradedAt/note） */
++++++++++++function parseTradePayload(
++++++++++++	payload: Record<string, unknown>,
++++++++++++	{t, partial}: { t: Parameters<typeof asRecord>[1]; partial: boolean },
++++++++++++) {
++++++++++++	const out: Record<string, unknown> = {};
++++++++++++	if (payload.side !== undefined) out.side = requireOneOf(payload, "side", ["buy", "sell"] as const, "field.side", t);
++++++++++++	if (payload.qty !== undefined) out.qty = requireNumber(payload, "qty", { labelKey: "field.qty", min: 0, max: 1e15 }, t);
++++++++++++	if (payload.price !== undefined) out.price = requireNumber(payload, "price", { labelKey: "field.price", min: 0, max: 1e15 }, t);
++++++++++++	if (payload.fee !== undefined) out.fee = optionalNumber(payload, "fee", { labelKey: "field.fee", min: 0, max: 1e15 }, t) ?? 0;
++++++++++++	if (payload.tradedAt !== undefined) {
++++++++++++		const value = requireString(payload, "tradedAt", { labelKey: "field.date", max: 10 }, t);
++++++++++++		if (!DATE_RE.test(value)) throw badRequest("交易日期格式应为 YYYY-MM-DD", "invalid_field");
++++++++++++		out.tradedAt = value;
++++++++++++	}
++++++++++++	if (payload.note !== undefined) out.note = optionalString(payload, "note", { labelKey: "field.note", max: 200 }, t);
++++++++++++	if (!partial) {
++++++++++++		// 新增必须给全量字段
++++++++++++		if (out.side === undefined) throw badRequest("缺少 side", "invalid_field");
++++++++++++		if (out.qty === undefined) throw badRequest("缺少 qty", "invalid_field");
++++++++++++		if (out.price === undefined) throw badRequest("缺少 price", "invalid_field");
++++++++++++	}
++++++++++++	return out;
++++++++++++}
++++++++++++
++++++++++++/** 统一返回 GET 视图：交易列表 + 口径计算结果 + 持仓 + 口径 */
++++++++++++async function tradesView(db: D1Database, holdingId: string) {
++++++++++++	const holding = await getHolding(db, holdingId);
++++++++++++	if (!holding) throw notFound("持仓不存在");
++++++++++++	const account = await getAccount(db, holding.account_id);
++++++++++++	const method: CostMethod = account?.cost_method ?? "fifo";
++++++++++++	const tradeLikes = await listTrades(db, holdingId);
++++++++++++	return {
++++++++++++		holdingId,
++++++++++++		tradeMode: (holding.trade_mode ?? 0) === 1,
++++++++++++		costMethod: method,
++++++++++++		holding: {
++++++++++++			id: holding.id,
++++++++++++			name: holding.name,
++++++++++++			symbol: holding.symbol,
++++++++++++			market: holding.market,
++++++++++++			currency: holding.currency,
++++++++++++			qty: holding.qty,
++++++++++++			avgCost: holding.avg_cost,
++++++++++++			realizedPnl: holding.realized_pnl ?? 0,
++++++++++++			price: holding.price,
++++++++++++		},
++++++++++++		trades: tradeLikes,
++++++++++++		state: computeState(tradeLikes, method),
++++++++++++	};
++++++++++++}
++++++++++++
++++++++++++trades.get("/", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const holdingId = requireId(c.req.param("id"), t);
++++++++++++	return ok(c, await tradesView(c.env.DB, holdingId));
++++++++++++});
++++++++++++
++++++++++++trades.post("/", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const holdingId = requireId(c.req.param("id"), t);
++++++++++++	if (!(await getHolding(c.env.DB, holdingId))) throw notFound("持仓不存在");
++++++++++++	const payload = asRecord(await c.req.json(), t);
++++++++++++	const input = parseTradePayload(payload, { t, partial: false });
++++++++++++	const { trade, holding } = await createTrade(c.env.DB, holdingId, {
++++++++++++		side: input.side as "buy" | "sell",
++++++++++++		qty: input.qty as number,
++++++++++++		price: input.price as number,
++++++++++++		fee: input.fee as number | undefined,
++++++++++++		traded_at: input.tradedAt as string,
++++++++++++		note: (input.note as string | null | undefined) ?? null,
++++++++++++	});
++++++++++++	await writeAudit(c.env.DB, { entity: "holding", entityId: holdingId, action: "update", after: { trade: trade.id, holding }, note: "新增交易流水" });
++++++++++++	return ok(c, await tradesView(c.env.DB, holdingId), 201);
++++++++++++});
++++++++++++
++++++++++++trades.patch("/:tid", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const holdingId = requireId(c.req.param("id"), t);
++++++++++++	const tradeId = requireId(c.req.param("tid"), t);
++++++++++++	if (!(await getHolding(c.env.DB, holdingId))) throw notFound("持仓不存在");
++++++++++++	const payload = asRecord(await c.req.json(), t);
++++++++++++	const input = parseTradePayload(payload, { t, partial: true });
++++++++++++	await updateTrade(c.env.DB, holdingId, tradeId, {
++++++++++++		side: input.side as "buy" | "sell" | undefined,
++++++++++++		qty: input.qty as number | undefined,
++++++++++++		price: input.price as number | undefined,
++++++++++++		fee: input.fee as number | undefined,
++++++++++++		traded_at: input.tradedAt as string | undefined,
++++++++++++		note: input.note === undefined ? undefined : (input.note as string | null),
++++++++++++	});
++++++++++++	await writeAudit(c.env.DB, { entity: "holding", entityId: holdingId, action: "update", note: `修改交易 ${tradeId}` });
++++++++++++	return ok(c, await tradesView(c.env.DB, holdingId));
++++++++++++});
++++++++++++
++++++++++++trades.delete("/:tid", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const holdingId = requireId(c.req.param("id"), t);
++++++++++++	const tradeId = requireId(c.req.param("tid"), t);
++++++++++++	if (!(await getHolding(c.env.DB, holdingId))) throw notFound("持仓不存在");
++++++++++++	await deleteTrade(c.env.DB, holdingId, tradeId);
++++++++++++	await writeAudit(c.env.DB, { entity: "holding", entityId: holdingId, action: "update", note: `删除交易 ${tradeId}` });
++++++++++++	return ok(c, await tradesView(c.env.DB, holdingId));
++++++++++++});
++++++++++++
++++++++++++/** 开启交易驱动：若持仓有存量且无流水，自动补一笔开仓基准买入 */
++++++++++++trades.post("/enable", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const holdingId = requireId(c.req.param("id"), t);
++++++++++++	const holding = await enableTradeMode(c.env.DB, holdingId);
++++++++++++	await writeAudit(c.env.DB, { entity: "holding", entityId: holdingId, action: "update", after: { qty: holding.qty, avgCost: holding.avg_cost }, note: "开启交易流水驱动" });
++++++++++++	return ok(c, await tradesView(c.env.DB, holdingId));
++++++++++++});
++++++++++++
++++++++++++/** 关闭交易驱动：冻结当前数量/成本为手动，保留全部交易记录 */
++++++++++++trades.post("/disable", async (c) => {
++++++++++++	const t = tOf(c);
++++++++++++	const holdingId = requireId(c.req.param("id"), t);
++++++++++++	await disableTradeMode(c.env.DB, holdingId);
++++++++++++	await writeAudit(c.env.DB, { entity: "holding", entityId: holdingId, action: "update", note: "关闭交易流水驱动" });
++++++++++++	return ok(c, await tradesView(c.env.DB, holdingId));
++++++++++++});
++++++++++++
++++++++++++export default trades;
+++++++++++diff --git a/src/trades/ui/TradesPage.tsx b/src/trades/ui/TradesPage.tsx
+++++++++++new file mode 100644
+++++++++++index 0000000..9e5e121
+++++++++++--- /dev/null
++++++++++++++ b/src/trades/ui/TradesPage.tsx
+++++++++++@@ -0,0 +1,410 @@
++++++++++++import { useEffect, useState } from "react";
++++++++++++import { useRouter } from "../../web/lib/router";
++++++++++++import { useT } from "../../web/lib/i18n";
++++++++++++import { money, number, signedMoney } from "../../web/lib/format";
++++++++++++import { tradesApi, type TradeInput, type TradesView } from "./api";
++++++++++++import type { TradeLike } from "../calc";
++++++++++++
++++++++++++/** 交易表单字段 */
++++++++++++interface TradeForm {
++++++++++++	side: "buy" | "sell";
++++++++++++	qty: string;
++++++++++++	price: string;
++++++++++++	fee: string;
++++++++++++	tradedAt: string;
++++++++++++	note: string;
++++++++++++}
++++++++++++
++++++++++++const emptyForm = (): TradeForm => ({
++++++++++++	side: "buy",
++++++++++++	qty: "",
++++++++++++	price: "",
++++++++++++	fee: "0",
++++++++++++	tradedAt: new Date().toISOString().slice(0, 10),
++++++++++++	note: "",
++++++++++++});
++++++++++++
++++++++++++/**
++++++++++++ * 持仓交易流水页（独立功能，路由 /trades/:holdingId）
++++++++++++ *
++++++++++++ * 功能：
++++++++++++ *   - 开启/关闭「交易驱动」：开启后本持仓的数量与平均成本由流水自动推导（有存量自动补开仓基准）
++++++++++++ *   - 录入/编辑/删除买入卖出交易，FIFO 逐笔法自动核算剩余成本与已实现盈亏
++++++++++++ *   - 切换回手动模式不会删除任何交易记录
++++++++++++ */
++++++++++++export function TradesPage() {
++++++++++++	const t = useT();
++++++++++++	const { path, navigate } = useRouter();
++++++++++++	const holdingId = path.split("/")[2] ?? "";
++++++++++++
++++++++++++	const [view, setView] = useState<TradesView | null>(null);
++++++++++++	const [loading, setLoading] = useState(true);
++++++++++++	const [error, setError] = useState<string | null>(null);
++++++++++++	const [submitting, setSubmitting] = useState(false);
++++++++++++	/** 正在编辑的交易 id；null 表示新增 */
++++++++++++	const [editingId, setEditingId] = useState<string | null>(null);
++++++++++++	const [form, setForm] = useState<TradeForm>(emptyForm());
++++++++++++
++++++++++++	const load = async () => {
++++++++++++		if (!holdingId) return;
++++++++++++		setLoading(true);
++++++++++++		setError(null);
++++++++++++		try {
++++++++++++			setView(await tradesApi.get(holdingId));
++++++++++++		} catch (err) {
++++++++++++			setError(err instanceof Error ? err.message : "加载失败");
++++++++++++		} finally {
++++++++++++			setLoading(false);
++++++++++++		}
++++++++++++	};
++++++++++++
++++++++++++	useEffect(() => {
++++++++++++		void load();
++++++++++++		// eslint-disable-next-line react-hooks/exhaustive-deps
++++++++++++	}, [holdingId]);
++++++++++++
++++++++++++	const startEdit = (trade: TradeLike) => {
++++++++++++		setEditingId(trade.id);
++++++++++++		setForm({
++++++++++++			side: trade.side,
++++++++++++			qty: String(trade.qty),
++++++++++++			price: String(trade.price),
++++++++++++			fee: String(trade.fee ?? 0),
++++++++++++			tradedAt: trade.traded_at,
++++++++++++			note: trade.note ?? "",
++++++++++++		});
++++++++++++	};
++++++++++++
++++++++++++	const submit = async (event: React.FormEvent) => {
++++++++++++		event.preventDefault();
++++++++++++		if (!view) return;
++++++++++++		const qty = Number(form.qty);
++++++++++++		const price = Number(form.price);
++++++++++++		const fee = Number(form.fee || 0);
++++++++++++		if (!Number.isFinite(qty) || qty <= 0) {
++++++++++++			setError("数量必须大于 0");
++++++++++++			return;
++++++++++++		}
++++++++++++		if (!Number.isFinite(price) || price <= 0) {
++++++++++++			setError("单价必须大于 0");
++++++++++++			return;
++++++++++++		}
++++++++++++		if (!/^\d{4}-\d{2}-\d{2}$/.test(form.tradedAt)) {
++++++++++++			setError("交易日期格式应为 YYYY-MM-DD");
++++++++++++			return;
++++++++++++		}
++++++++++++		const input: TradeInput = {
++++++++++++			side: form.side,
++++++++++++			qty,
++++++++++++			price,
++++++++++++			fee,
++++++++++++			tradedAt: form.tradedAt,
++++++++++++			note: form.note.trim() || null,
++++++++++++		};
++++++++++++		setSubmitting(true);
++++++++++++		setError(null);
++++++++++++		try {
++++++++++++			if (editingId) await tradesApi.update(holdingId, editingId, input);
++++++++++++			else await tradesApi.create(holdingId, input);
++++++++++++			setForm(emptyForm());
++++++++++++			setEditingId(null);
++++++++++++			await load();
++++++++++++		} catch (err) {
++++++++++++			setError(err instanceof Error ? err.message : "保存失败");
++++++++++++		} finally {
++++++++++++			setSubmitting(false);
++++++++++++		}
++++++++++++	};
++++++++++++
++++++++++++	const remove = async (trade: TradeLike) => {
++++++++++++		if (!window.confirm("确认删除这笔交易？已实现盈亏将随之重算。")) return;
++++++++++++		setError(null);
++++++++++++		try {
++++++++++++			await tradesApi.remove(holdingId, trade.id);
++++++++++++			await load();
++++++++++++		} catch (err) {
++++++++++++			setError(err instanceof Error ? err.message : "删除失败");
++++++++++++		}
++++++++++++	};
++++++++++++
++++++++++++	const toggleMode = async () => {
++++++++++++		if (!view) return;
++++++++++++		if (!view.tradeMode && !window.confirm("开启「交易驱动」后，本持仓的数量与平均成本将由交易流水自动计算（不可手改）。已有持仓会自动生成一笔开仓基准，继续吗？")) {
++++++++++++			return;
++++++++++++		}
++++++++++++		setError(null);
++++++++++++		try {
++++++++++++			await tradesApi[view.tradeMode ? "disable" : "enable"](holdingId);
++++++++++++			await load();
++++++++++++		} catch (err) {
++++++++++++			setError(err instanceof Error ? err.message : "切换失败");
++++++++++++		}
++++++++++++	};
++++++++++++
++++++++++++	if (loading) {
++++++++++++		return (
++++++++++++			<div className="card panel">
++++++++++++				<div className="skeleton" style={{ height: 160 }} />
++++++++++++			</div>
++++++++++++		);
++++++++++++	}
++++++++++++	if (!view) {
++++++++++++		return (
++++++++++++			<div className="card empty">
++++++++++++				{error ?? "未找到该持仓"}
++++++++++++				<div style={{ marginTop: 12 }}>
++++++++++++					<button className="ghost" onClick={() => navigate("/holdings")}>
++++++++++++						返回持仓
++++++++++++					</button>
++++++++++++				</div>
++++++++++++			</div>
++++++++++++		);
++++++++++++	}
++++++++++++
++++++++++++	const state = view.state;
++++++++++++	const currency = view.holding.currency;
++++++++++++	const sorted = [...view.trades].sort(
++++++++++++		(a, b) => a.traded_at.localeCompare(b.traded_at) || a.id.localeCompare(b.id),
++++++++++++	);
++++++++++++	// 开仓基准批显示为独立标识
++++++++++++	const isSeed = (trade: TradeLike) => Boolean(trade.seed);
++++++++++++	// 成本口径展示名
++++++++++++	const methodLabel =
++++++++++++		view.costMethod === "weighted"
++++++++++++			? "移动加权平均"
++++++++++++			: view.costMethod === "diluted"
++++++++++++				? "摊薄成本"
++++++++++++				: "先进先出（FIFO）";
++++++++++++
++++++++++++	return (
++++++++++++		<>
++++++++++++			<div className="section-head">
++++++++++++				<h2>
++++++++++++					<button className="ghost" onClick={() => navigate("/holdings")} style={{ marginRight: 8 }}>
++++++++++++						←
++++++++++++					</button>
++++++++++++					交易流水
++++++++++++					{view.holding.symbol ? ` · ${view.holding.symbol}` : ""}
++++++++++++					<span className="muted small"> {view.holding.name}</span>
++++++++++++				</h2>
++++++++++++				<div className="spacer" />
++++++++++++				<button className={view.tradeMode ? "ghost" : "primary"} onClick={() => void toggleMode()}>
++++++++++++					{view.tradeMode ? t("交易驱动已开启") : t("开启交易驱动")}
++++++++++++				</button>
++++++++++++			</div>
++++++++++++
++++++++++++			{error && <div className="alert error">{error}</div>}
++++++++++++
++++++++++++			{/* 汇总卡 */}
++++++++++++			<div className="row" style={{ gap: 12, marginBottom: 16 }}>
++++++++++++				<div className="card panel" style={{ flex: 1 }}>
++++++++++++					<div className="small muted">剩余数量</div>
++++++++++++					<div className="h3">{number(state.qty)}</div>
++++++++++++				</div>
++++++++++++				<div className="card panel" style={{ flex: 1 }}>
++++++++++++					<div className="small muted">平均成本（{methodLabel}）</div>
++++++++++++					<div className="h3">{state.avgCost === null ? "—" : money(state.avgCost, currency, 4)}</div>
++++++++++++				</div>
++++++++++++				<div className="card panel" style={{ flex: 1 }}>
++++++++++++					<div className="small muted">累计已实现盈亏</div>
++++++++++++					{view.costMethod === "diluted" ? (
++++++++++++						<div className="h3 muted" title="摊薄成本法下盈亏已融入剩余成本，不再单独结算">
++++++++++++							不适用
++++++++++++						</div>
++++++++++++					) : (
++++++++++++						<div className={`h3 ${state.realizedPnl > 0 ? "positive" : state.realizedPnl < 0 ? "negative" : "muted"}`}>
++++++++++++							{signedMoney(state.realizedPnl, currency)}
++++++++++++						</div>
++++++++++++					)}
++++++++++++				</div>
++++++++++++			</div>
++++++++++++
++++++++++++			{view.tradeMode && (
++++++++++++				<div className="small muted" style={{ marginBottom: 12 }}>
++++++++++++					该持仓已开启交易驱动：数量与平均成本由交易流水按「{methodLabel}」口径自动计算，持仓页不可手改。{" "}
++++++++++++					{view.costMethod === "fifo" && state.lots.length > 0
++++++++++++						? `当前由 ${state.lots.length} 个未卖出批次构成。`
++++++++++++						: state.qty > 0
++++++++++++							? "当前有剩余持仓。"
++++++++++++							: "当前无剩余持仓。"}
++++++++++++				</div>
++++++++++++			)}
++++++++++++
++++++++++++			{/* 录入 / 编辑表单 */}
++++++++++++			<form
++++++++++++				className={`card panel${editingId ? " attention" : ""}`}
++++++++++++				onSubmit={(event) => void submit(event)}
++++++++++++				style={{ marginBottom: 16 }}
++++++++++++			>
++++++++++++				<div className="section-head" style={{ marginTop: 0 }}>
++++++++++++					<h3 style={{ margin: 0, fontSize: 14 }}>
++++++++++++						{editingId ? `编辑交易（${editingId.slice(0, 8)}…）` : "录入新交易"}
++++++++++++					</h3>
++++++++++++				</div>
++++++++++++				<div className="row">
++++++++++++					<label className="field">
++++++++++++						<span>方向</span>
++++++++++++						<select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value as "buy" | "sell" })}>
++++++++++++							<option value="buy">买入</option>
++++++++++++							<option value="sell">卖出</option>
++++++++++++						</select>
++++++++++++					</label>
++++++++++++					<label className="field">
++++++++++++						<span>日期</span>
++++++++++++						<input
++++++++++++							type="date"
++++++++++++							value={form.tradedAt}
++++++++++++							onChange={(e) => setForm({ ...form, tradedAt: e.target.value })}
++++++++++++							required
++++++++++++						/>
++++++++++++					</label>
++++++++++++					<label className="field">
++++++++++++						<span>数量</span>
++++++++++++						<input
++++++++++++							type="number"
++++++++++++							step="any"
++++++++++++							min="0"
++++++++++++							value={form.qty}
++++++++++++							onChange={(e) => setForm({ ...form, qty: e.target.value })}
++++++++++++							required
++++++++++++						/>
++++++++++++					</label>
++++++++++++					<label className="field">
++++++++++++						<span>单价（{currency}）</span>
++++++++++++						<input
++++++++++++							type="number"
++++++++++++							step="any"
++++++++++++							min="0"
++++++++++++							value={form.price}
++++++++++++							onChange={(e) => setForm({ ...form, price: e.target.value })}
++++++++++++							required
++++++++++++						/>
++++++++++++					</label>
++++++++++++					<label className="field">
++++++++++++						<span>手续费（{currency}）</span>
++++++++++++						<input
++++++++++++							type="number"
++++++++++++							step="any"
++++++++++++							min="0"
++++++++++++							value={form.fee}
++++++++++++							onChange={(e) => setForm({ ...form, fee: e.target.value })}
++++++++++++						/>
++++++++++++					</label>
++++++++++++					<label className="field">
++++++++++++						<span>备注</span>
++++++++++++						<input
++++++++++++							value={form.note}
++++++++++++							onChange={(e) => setForm({ ...form, note: e.target.value })}
++++++++++++							placeholder="可选"
++++++++++++						/>
++++++++++++					</label>
++++++++++++				</div>
++++++++++++				<div className="row">
++++++++++++					<button className="primary" type="submit" disabled={submitting}>
++++++++++++						{submitting ? "保存中…" : editingId ? "保存修改" : "添加交易"}
++++++++++++					</button>
++++++++++++					{editingId && (
++++++++++++						<button
++++++++++++							type="button"
++++++++++++							onClick={() => {
++++++++++++								setEditingId(null);
++++++++++++								setForm(emptyForm());
++++++++++++							}}
++++++++++++						>
++++++++++++							取消编辑
++++++++++++						</button>
++++++++++++					)}
++++++++++++				</div>
++++++++++++			</form>
++++++++++++
++++++++++++			{/* 交易流水表 */}
++++++++++++			<div className="card table-wrap">
++++++++++++				<table>
++++++++++++					<thead>
++++++++++++						<tr>
++++++++++++							<th className="left">日期</th>
++++++++++++							<th className="left">方向</th>
++++++++++++							<th className="left">数量</th>
++++++++++++							<th className="left">单价</th>
++++++++++++							<th className="left">手续费</th>
++++++++++++							<th className="left hide-sm">备注</th>
++++++++++++							<th className="left">操作</th>
++++++++++++						</tr>
++++++++++++					</thead>
++++++++++++					<tbody>
++++++++++++						{sorted.length === 0 ? (
++++++++++++							<tr>
++++++++++++								<td colSpan={7} className="muted">
++++++++++++									还没有交易记录。可先「开启交易驱动」自动生成开仓基准，或直接录入第一笔买入。
++++++++++++								</td>
++++++++++++							</tr>
++++++++++++						) : (
++++++++++++							sorted.map((trade) => (
++++++++++++								<tr key={trade.id} className={editingId === trade.id ? "row-editing" : undefined}>
++++++++++++									<td className="left">{trade.traded_at}</td>
++++++++++++									<td className="left">
++++++++++++										<span className={trade.side === "buy" ? "positive" : "negative"}>
++++++++++++											{trade.side === "buy" ? "买入" : "卖出"}
++++++++++++										</span>
++++++++++++										{isSeed(trade) && <span className="badge"> 开仓基准</span>}
++++++++++++									</td>
++++++++++++									<td className="left">{number(trade.qty)}</td>
++++++++++++									<td className="left">{number(trade.price)}</td>
++++++++++++									<td className="left">{number(trade.fee ?? 0)}</td>
++++++++++++									<td className="left hide-sm muted">{trade.note ?? ""}</td>
++++++++++++									<td className="left">
++++++++++++										{!isSeed(trade) && (
++++++++++++											<>
++++++++++++												<button className="ghost" onClick={() => startEdit(trade)}>
++++++++++++													编辑
++++++++++++												</button>
++++++++++++												<button className="ghost danger" onClick={() => void remove(trade)}>
++++++++++++													删除
++++++++++++												</button>
++++++++++++											</>
++++++++++++										)}
++++++++++++									</td>
++++++++++++								</tr>
++++++++++++							))
++++++++++++						)}
++++++++++++					</tbody>
++++++++++++				</table>
++++++++++++			</div>
++++++++++++
++++++++++++			{/* FIFO 批次透视（只读） */}
++++++++++++			{state.lots.length > 0 && (
++++++++++++				<div className="section">
++++++++++++					<div className="section-head">
++++++++++++						<h2>剩余批次（FIFO）</h2>
++++++++++++					</div>
++++++++++++					<div className="card table-wrap">
++++++++++++						<table>
++++++++++++							<thead>
++++++++++++								<tr>
++++++++++++									<th className="left">来源</th>
++++++++++++									<th className="left">买入日期</th>
++++++++++++									<th className="left">剩余数量</th>
++++++++++++									<th className="left">成本单价</th>
++++++++++++									<th className="left">剩余成本</th>
++++++++++++								</tr>
++++++++++++							</thead>
++++++++++++							<tbody>
++++++++++++								{state.lots.map((lot) => (
++++++++++++									<tr key={lot.tradeId}>
++++++++++++										<td className="left">
++++++++++++											{lot.seed ? "开仓基准" : lot.tradeId.slice(0, 8)}
++++++++++++										</td>
++++++++++++										<td className="left">{view.trades.find((trade) => trade.id === lot.tradeId)?.traded_at ?? "—"}</td>
++++++++++++										<td className="left">{number(lot.qty)}</td>
++++++++++++										<td className="left">{number(lot.price)}</td>
++++++++++++										<td className="left">{money(lot.cost, currency)}</td>
++++++++++++									</tr>
++++++++++++								))}
++++++++++++							</tbody>
++++++++++++						</table>
++++++++++++					</div>
++++++++++++				</div>
++++++++++++			)}
++++++++++++		</>
++++++++++++	);
++++++++++++}
+++++++++++diff --git a/src/trades/ui/api.ts b/src/trades/ui/api.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..4265657
+++++++++++--- /dev/null
++++++++++++++ b/src/trades/ui/api.ts
+++++++++++@@ -0,0 +1,91 @@
++++++++++++import type { CostMethod, CostState, TradeLike } from "../calc";
++++++++++++
++++++++++++/**
++++++++++++ * 交易流水前端 API 客户端 —— 自包含，不依赖 src/web/lib/api.ts，
++++++++++++ * 保证本功能文件夹可以整体独立同步，与主程序升级互不牵连。
++++++++++++ */
++++++++++++
++++++++++++interface Envelope<T> {
++++++++++++	ok: boolean;
++++++++++++	data?: T;
++++++++++++	error?: { code: string; message: string };
++++++++++++}
++++++++++++
++++++++++++export class TradesApiError extends Error {
++++++++++++	readonly status: number;
++++++++++++	readonly code: string;
++++++++++++	constructor(status: number, code: string, message: string) {
++++++++++++		super(message);
++++++++++++		this.status = status;
++++++++++++		this.code = code;
++++++++++++	}
++++++++++++}
++++++++++++
++++++++++++async function request<T>(path: string, init?: RequestInit): Promise<T> {
++++++++++++	const response = await fetch(path, {
++++++++++++		credentials: "same-origin",
++++++++++++		headers: init?.body ? { "Content-Type": "application/json" } : undefined,
++++++++++++		...init,
++++++++++++	});
++++++++++++	let payload: Envelope<T> | null = null;
++++++++++++	try {
++++++++++++		payload = (await response.json()) as Envelope<T>;
++++++++++++	} catch {
++++++++++++		payload = null;
++++++++++++	}
++++++++++++	if (!response.ok || !payload?.ok) {
++++++++++++		throw new TradesApiError(
++++++++++++			response.status,
++++++++++++			payload?.error?.code ?? "request_failed",
++++++++++++			payload?.error?.message ?? `请求失败（HTTP ${response.status}）`,
++++++++++++		);
++++++++++++	}
++++++++++++	return payload.data as T;
++++++++++++}
++++++++++++
++++++++++++const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
++++++++++++
++++++++++++/** 持仓交易视图：持仓信息 + 流水 + 口径计算结果 */
++++++++++++export interface TradesView {
++++++++++++	holdingId: string;
++++++++++++	tradeMode: boolean;
++++++++++++	/** 所属账户的成本口径：fifo / weighted / diluted */
++++++++++++	costMethod: CostMethod;
++++++++++++	holding: {
++++++++++++		id: string;
++++++++++++		name: string;
++++++++++++		symbol: string | null;
++++++++++++		market: string | null;
++++++++++++		currency: string;
++++++++++++		qty: number;
++++++++++++		avgCost: number | null;
++++++++++++		realizedPnl: number;
++++++++++++		price: number;
++++++++++++	};
++++++++++++	trades: TradeLike[];
++++++++++++	state: CostState;
++++++++++++}
++++++++++++
++++++++++++export interface TradeInput {
++++++++++++	side: "buy" | "sell";
++++++++++++	qty: number;
++++++++++++	price: number;
++++++++++++	fee?: number;
++++++++++++	tradedAt: string;
++++++++++++	note?: string | null;
++++++++++++}
++++++++++++
++++++++++++export const tradesApi = {
++++++++++++	get: (holdingId: string) => request<TradesView>(`/api/holdings/${holdingId}/trades`),
++++++++++++	create: (holdingId: string, input: TradeInput) =>
++++++++++++		request<TradesView>(`/api/holdings/${holdingId}/trades`, json(input)),
++++++++++++	update: (holdingId: string, tradeId: string, input: Partial<TradeInput>) =>
++++++++++++		request<TradesView>(`/api/holdings/${holdingId}/trades/${tradeId}`, {
++++++++++++			method: "PATCH",
++++++++++++			body: JSON.stringify(input),
++++++++++++		}),
++++++++++++	remove: (holdingId: string, tradeId: string) =>
++++++++++++		request<TradesView>(`/api/holdings/${holdingId}/trades/${tradeId}`, { method: "DELETE" }),
++++++++++++	enable: (holdingId: string) => request<TradesView>(`/api/holdings/${holdingId}/trades/enable`, json({})),
++++++++++++	disable: (holdingId: string) => request<TradesView>(`/api/holdings/${holdingId}/trades/disable`, json({})),
++++++++++++};
+++++++++++diff --git a/src/web/App.tsx b/src/web/App.tsx
+++++++++++index 7853770..95f4de5 100644
+++++++++++--- a/src/web/App.tsx
++++++++++++++ b/src/web/App.tsx
+++++++++++@@ -18,6 +18,11 @@ const AccountsPage = lazy(() => import("./pages/Accounts").then((module) => ({ d
+++++++++++ const HoldingsPage = lazy(() => import("./pages/Holdings").then((module) => ({ default: module.HoldingsPage })));
+++++++++++ const HistoryPage = lazy(() => import("./pages/History").then((module) => ({ default: module.HistoryPage })));
+++++++++++ const SettingsPage = lazy(() => import("./pages/Settings").then((module) => ({ default: module.SettingsPage })));
++++++++++++// 独立功能：持仓交易流水（/trades/:holdingId），来自 src/trades/
++++++++++++const TradesPage = lazy(() => import("../trades/ui/TradesPage").then((module) => ({ default: module.TradesPage })));
++++++++++++// 独立功能：自定义导航菜单（顶栏渲染 + /custom/:id 嵌入页），来自 src/custom-nav/
++++++++++++import { CustomNav } from "../custom-nav/ui/CustomNav";
++++++++++++const CustomNavPage = lazy(() => import("../custom-nav/ui/CustomNavPage").then((module) => ({ default: module.CustomNavPage })));
+++++++++++ 
+++++++++++ function PageLoading() {
+++++++++++ 	const t = useT();
+++++++++++@@ -37,6 +42,8 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
+++++++++++ 	const t = useT();
+++++++++++ 
+++++++++++ 	const page = (() => {
++++++++++++		if (path.startsWith("/trades")) return <TradesPage />;
++++++++++++		if (path.startsWith("/custom")) return <CustomNavPage />; // 独立功能：自定义导航嵌入页（src/custom-nav/）
+++++++++++ 		if (path.startsWith("/accounts")) return <AccountsPage />;
+++++++++++ 		if (path.startsWith("/holdings")) return <HoldingsPage />;
+++++++++++ 		if (path.startsWith("/history")) return <HistoryPage />;
+++++++++++@@ -54,6 +61,7 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
+++++++++++ 							{t(item.key)}
+++++++++++ 						</Link>
+++++++++++ 					))}
++++++++++++					<CustomNav />
+++++++++++ 				</nav>
+++++++++++ 				<div className="spacer" />
+++++++++++ 				<button
+++++++++++diff --git a/src/web/pages/Accounts.tsx b/src/web/pages/Accounts.tsx
+++++++++++index 4d51f21..ad94852 100644
+++++++++++--- a/src/web/pages/Accounts.tsx
++++++++++++++ b/src/web/pages/Accounts.tsx
+++++++++++@@ -4,7 +4,7 @@ import { useAsync, useSubmit } from "../lib/useAsync";
+++++++++++ import { BrandIcon, defaultIconFor, IconPicker } from "../lib/icons";
+++++++++++ import { useT } from "../lib/i18n";
+++++++++++ import { money, percent } from "../lib/format";
+++++++++++-import { ACCOUNT_KINDS, kindLabel, marketLabel, MARKETS, type AccountKind, type Market } from "../../shared/labels";
++++++++++++import { ACCOUNT_KINDS, COST_METHODS, costMethodLabel, kindLabel, marketLabel, MARKETS, type AccountKind, type Market } from "../../shared/labels";
+++++++++++ 
+++++++++++ const CURRENCIES = ["USD", "HKD", "CNY"];
+++++++++++ 
+++++++++++@@ -15,6 +15,7 @@ interface FormState {
+++++++++++ 	market: Market | "";
+++++++++++ 	iconKey: string | null;
+++++++++++ 	note: string;
++++++++++++	costMethod: (typeof COST_METHODS)[number];
+++++++++++ }
+++++++++++ 
+++++++++++ const emptyForm = (): FormState => ({
+++++++++++@@ -24,6 +25,7 @@ const emptyForm = (): FormState => ({
+++++++++++ 	market: "us",
+++++++++++ 	iconKey: "broker",
+++++++++++ 	note: "",
++++++++++++	costMethod: "fifo",
+++++++++++ });
+++++++++++ 
+++++++++++ export function AccountsPage() {
+++++++++++@@ -50,6 +52,7 @@ export function AccountsPage() {
+++++++++++ 			market: (account.market as Market | null) ?? "",
+++++++++++ 			iconKey: account.icon_key,
+++++++++++ 			note: account.note ?? "",
++++++++++++			costMethod: account.cost_method ?? "fifo",
+++++++++++ 		});
+++++++++++ 		setEditingId(account.id);
+++++++++++ 		setOpen(true);
+++++++++++@@ -62,20 +65,21 @@ export function AccountsPage() {
+++++++++++ 			return;
+++++++++++ 		}
+++++++++++ 		await run(async () => {
+++++++++++-			const payload = {
+++++++++++-				name: form.name.trim(),
+++++++++++-				kind: form.kind,
+++++++++++-				currency: form.currency,
+++++++++++-				market: form.kind === "cash" ? null : form.market || null,
+++++++++++-				iconKey: form.iconKey,
+++++++++++-				note: form.note.trim() || null,
+++++++++++-			};
+++++++++++-			if (editingId) await api.accounts.update(editingId, payload);
+++++++++++-			else await api.accounts.create(payload);
+++++++++++-			setOpen(false);
+++++++++++-			setEditingId(null);
+++++++++++-			accounts.reload();
+++++++++++-		});
++++++++++++				const payload = {
++++++++++++					name: form.name.trim(),
++++++++++++					kind: form.kind,
++++++++++++					currency: form.currency,
++++++++++++					market: form.kind === "cash" ? null : form.market || null,
++++++++++++					iconKey: form.iconKey,
++++++++++++					note: form.note.trim() || null,
++++++++++++					costMethod: form.costMethod,
++++++++++++				};
++++++++++++				if (editingId) await api.accounts.update(editingId, payload);
++++++++++++				else await api.accounts.create(payload);
++++++++++++				setOpen(false);
++++++++++++				setEditingId(null);
++++++++++++				accounts.reload();
++++++++++++			});
+++++++++++ 	};
+++++++++++ 
+++++++++++ 	const remove = async (account: AccountDto) => {
+++++++++++@@ -187,6 +191,19 @@ export function AccountsPage() {
+++++++++++ 								</select>
+++++++++++ 							</label>
+++++++++++ 						)}
++++++++++++						<label className="field">
++++++++++++							<span>{t("accounts.costMethod")}</span>
++++++++++++							<select
++++++++++++								value={form.costMethod}
++++++++++++								onChange={(e) => setForm({ ...form, costMethod: e.target.value as (typeof COST_METHODS)[number] })}
++++++++++++							>
++++++++++++								{COST_METHODS.map((method) => (
++++++++++++									<option key={method} value={method}>
++++++++++++										{costMethodLabel(t, method)}
++++++++++++									</option>
++++++++++++								))}
++++++++++++							</select>
++++++++++++						</label>
+++++++++++ 					</div>
+++++++++++ 
+++++++++++ 					<label className="field">
+++++++++++@@ -231,6 +248,7 @@ export function AccountsPage() {
+++++++++++ 								<th className="left">{t("accounts.colKind")}</th>
+++++++++++ 								<th className="left">{t("accounts.colMarket")}</th>
+++++++++++ 								<th className="left">{t("accounts.colCurrency")}</th>
++++++++++++								<th className="left hide-sm">{t("accounts.colCostMethod")}</th>
+++++++++++ 								<th className="left hide-sm">{t("accounts.colNote")}</th>
+++++++++++ 								<th>{t("accounts.colValue", { currency: displayCurrency })}</th>
+++++++++++ 								<th>{t("accounts.colShare")}</th>
+++++++++++@@ -252,6 +270,7 @@ export function AccountsPage() {
+++++++++++ 										{account.market ? marketLabel(t, account.market as Market) : t("common.none")}
+++++++++++ 									</td>
+++++++++++ 									<td className="left">{account.currency}</td>
++++++++++++									<td className="left muted hide-sm">{costMethodLabel(t, account.cost_method ?? "fifo")}</td>
+++++++++++ 									<td className="left muted hide-sm">{account.note ?? t("common.none")}</td>
+++++++++++ 									<td>
+++++++++++ 										{account.archived === 1
+++++++++++diff --git a/src/web/pages/Holdings.tsx b/src/web/pages/Holdings.tsx
+++++++++++index aaf0e82..fdf9aa8 100644
+++++++++++--- a/src/web/pages/Holdings.tsx
++++++++++++++ b/src/web/pages/Holdings.tsx
+++++++++++@@ -61,7 +61,7 @@ function daysSince(iso: string | null): number | null {
+++++++++++ export function HoldingsPage() {
+++++++++++ 	const t = useT();
+++++++++++ 	const timeZone = useTimeZone();
+++++++++++-	const { query, setQuery } = useRouter();
++++++++++++	const { query, setQuery, navigate } = useRouter();
+++++++++++ 	const showArchived = query.get("archived") === "1";
+++++++++++ 	const filterAccount = query.get("account") ?? "";
+++++++++++ 	const filterClass = query.get("class") ?? "";
+++++++++++@@ -762,9 +762,14 @@ export function HoldingsPage() {
+++++++++++ 										</td>
+++++++++++ 										<td>{holding.avg_cost === null ? t("common.none") : number(holding.avg_cost)}</td>
+++++++++++ 										<td>
+++++++++++-											<button className="ghost" onClick={() => startEdit(holding)}>
+++++++++++-												{t("common.edit")}
+++++++++++-											</button>
++++++++++++												{holding.class !== "cash" && (
++++++++++++													<button className="ghost" onClick={() => navigate(`/trades/${holding.id}`)}>
++++++++++++														交易
++++++++++++													</button>
++++++++++++												)}
++++++++++++												<button className="ghost" onClick={() => startEdit(holding)}>
++++++++++++													{t("common.edit")}
++++++++++++												</button>
+++++++++++ 											<button className="ghost" onClick={() => toggleArchive(holding)}>
+++++++++++ 												{holding.archived === 1 ? t("accounts.restore") : t("accounts.archive")}
+++++++++++ 											</button>
+++++++++++diff --git a/src/worker/api/accounts.routes.ts b/src/worker/api/accounts.routes.ts
+++++++++++index 96da19c..16524d8 100644
+++++++++++--- a/src/worker/api/accounts.routes.ts
++++++++++++++ b/src/worker/api/accounts.routes.ts
+++++++++++@@ -1,7 +1,7 @@
+++++++++++ import { Hono } from "hono";
+++++++++++ import { tOf } from "../core/i18n";
+++++++++++ import type { AppEnv } from "../types";
+++++++++++-import { ACCOUNT_KINDS, MARKETS } from "../../shared/labels";
++++++++++++import { ACCOUNT_KINDS, COST_METHODS, MARKETS } from "../../shared/labels";
+++++++++++ import { badRequest, conflict, notFound, ok } from "../core/errors";
+++++++++++ import { writeAudit } from "../core/audit";
+++++++++++ import {
+++++++++++@@ -12,6 +12,7 @@ import {
+++++++++++ 	listAccounts,
+++++++++++ 	updateAccount,
+++++++++++ } from "../data/accounts.repo";
++++++++++++import { recomputeByAccount } from "../../trades/repo";
+++++++++++ import { asRecord, optionalNumber, optionalString, requireId, requireOneOf, requireString, requireCurrency } from "./validate";
+++++++++++ 
+++++++++++ const accounts = new Hono<AppEnv>();
+++++++++++@@ -35,6 +36,7 @@ accounts.post("/", async (c) => {
+++++++++++ 		icon_key: optionalString(payload, "iconKey", { labelKey: "field.icon", max: 40 }, t) ?? null,
+++++++++++ 		sort: optionalNumber(payload, "sort", { labelKey: "field.sort" }, t) ?? 0,
+++++++++++ 		note: optionalString(payload, "note", { labelKey: "field.note", max: 200 }, t) ?? null,
++++++++++++		cost_method: payload.costMethod === undefined ? "fifo" : requireOneOf(payload, "costMethod", COST_METHODS, "accounts.costMethod", t),
+++++++++++ 	};
+++++++++++ 	if (input.market && !MARKETS.includes(input.market as (typeof MARKETS)[number])) {
+++++++++++ 		throw badRequest(t("error.field_enum", { label: t("field.market"), allowed: MARKETS.join(" / ") }));
+++++++++++@@ -62,8 +64,13 @@ accounts.patch("/:id", async (c) => {
+++++++++++ 	if (payload.sort !== undefined) patch.sort = optionalNumber(payload, "sort", { labelKey: "field.sort" }, t) ?? 0;
+++++++++++ 	if (payload.note !== undefined) patch.note = optionalString(payload, "note", { labelKey: "field.note", max: 200 }, t) ?? null;
+++++++++++ 	if (payload.archived !== undefined) patch.archived = Boolean(payload.archived);
++++++++++++	if (payload.costMethod !== undefined) patch.cost_method = requireOneOf(payload, "costMethod", COST_METHODS, "accounts.costMethod", t);
+++++++++++ 
+++++++++++ 	const after = await updateAccount(c.env.DB, id, patch);
++++++++++++	// 切换成本口径 = 账户下全部「交易驱动」持仓按新口径重算（流水是唯一事实来源，可随时切回）
++++++++++++	if (patch.cost_method !== undefined && patch.cost_method !== (before.cost_method ?? "fifo")) {
++++++++++++		await recomputeByAccount(c.env.DB, id);
++++++++++++	}
+++++++++++ 	await writeAudit(c.env.DB, { entity: "account", entityId: id, action: "update", before, after });
+++++++++++ 	return ok(c, after);
+++++++++++ });
+++++++++++diff --git a/src/worker/api/holdings.routes.ts b/src/worker/api/holdings.routes.ts
+++++++++++index b1829ee..1a7e260 100644
+++++++++++--- a/src/worker/api/holdings.routes.ts
++++++++++++++ b/src/worker/api/holdings.routes.ts
+++++++++++@@ -120,6 +120,13 @@ holdings.patch("/:id", async (c) => {
+++++++++++ 	if (!before) throw notFound(t("error.not_found"));
+++++++++++ 
+++++++++++ 	const payload = asRecord(await c.req.json(), t);
++++++++++++	// ── 独立功能「交易流水」的锁定栅栏（src/trades/）─────────────────
++++++++++++	// 开启 trade_mode 的持仓，数量与成本由交易流水推导，禁止手改。
++++++++++++	// 注意：这段若被上游重写丢失，需重新应用（见 src/trades/README.md）。
++++++++++++	if ((before.trade_mode ?? 0) === 1 && (payload.qty !== undefined || payload.avgCost !== undefined)) {
++++++++++++		throw badRequest("该持仓已启用交易流水驱动，数量与平均成本由交易自动计算，不可手改");
++++++++++++	}
++++++++++++
+++++++++++ 	const patch: Record<string, unknown> = {};
+++++++++++ 	if (payload.accountId !== undefined) {
+++++++++++ 		const accountId = requireString(payload, "accountId", { labelKey: "field.account", max: 64 }, t);
+++++++++++diff --git a/src/worker/api/index.ts b/src/worker/api/index.ts
+++++++++++index 29f598b..608d473 100644
+++++++++++--- a/src/worker/api/index.ts
++++++++++++++ b/src/worker/api/index.ts
+++++++++++@@ -9,6 +9,8 @@ import settingsRoutes from "./settings.routes";
+++++++++++ import historyRoutes from "./history.routes";
+++++++++++ import backupRoutes from "./backup.routes";
+++++++++++ import quotesRoutes from "./quotes.routes";
++++++++++++import tradesRoutes from "../../trades/routes";
++++++++++++import customNavRoutes from "../../custom-nav/routes"; // 独立功能：自定义导航菜单（src/custom-nav/）
+++++++++++ 
+++++++++++ const api = new Hono<AppEnv>();
+++++++++++ 
+++++++++++@@ -27,6 +29,8 @@ guarded.route("/settings", settingsRoutes);
+++++++++++ guarded.route("/history", historyRoutes);
+++++++++++ guarded.route("/backup", backupRoutes);
+++++++++++ guarded.route("/quotes", quotesRoutes);
++++++++++++guarded.route("/holdings/:id/trades", tradesRoutes); // 独立功能：持仓交易流水（src/trades/）
++++++++++++guarded.route("/custom-nav", customNavRoutes); // 独立功能：自定义导航菜单（src/custom-nav/）
+++++++++++ 
+++++++++++ api.route("/", guarded);
+++++++++++ 
+++++++++++diff --git a/src/worker/data/accounts.repo.ts b/src/worker/data/accounts.repo.ts
+++++++++++index 0b1ef18..2307dad 100644
+++++++++++--- a/src/worker/data/accounts.repo.ts
++++++++++++++ b/src/worker/data/accounts.repo.ts
+++++++++++@@ -12,6 +12,8 @@ export interface AccountInput {
+++++++++++ 	icon_data?: string | null;
+++++++++++ 	sort?: number;
+++++++++++ 	note?: string | null;
++++++++++++	/** 成本口径（默认 fifo）：fifo / weighted / diluted（独立功能 src/trades/） */
++++++++++++	cost_method?: AccountRow["cost_method"];
+++++++++++ }
+++++++++++ 
+++++++++++ export async function listAccounts(db: D1Database, includeArchived = false): Promise<AccountRow[]> {
+++++++++++@@ -32,8 +34,8 @@ export async function createAccount(db: D1Database, input: AccountInput): Promis
+++++++++++ 	const id = newId();
+++++++++++ 	await db
+++++++++++ 		.prepare(
+++++++++++-			`INSERT INTO accounts (id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, created_at, updated_at)
+++++++++++-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
++++++++++++			`INSERT INTO accounts (id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, cost_method, created_at, updated_at)
++++++++++++			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+++++++++++ 		)
+++++++++++ 		.bind(
+++++++++++ 			id,
+++++++++++@@ -45,6 +47,7 @@ export async function createAccount(db: D1Database, input: AccountInput): Promis
+++++++++++ 			input.icon_data ?? null,
+++++++++++ 			input.sort ?? 0,
+++++++++++ 			input.note ?? null,
++++++++++++			input.cost_method ?? "fifo",
+++++++++++ 			now,
+++++++++++ 			now,
+++++++++++ 		)
+++++++++++@@ -72,12 +75,13 @@ export async function updateAccount(
+++++++++++ 		sort: patch.sort ?? current.sort,
+++++++++++ 		archived: patch.archived === undefined ? current.archived : patch.archived ? 1 : 0,
+++++++++++ 		note: patch.note === undefined ? current.note : patch.note,
++++++++++++		cost_method: patch.cost_method ?? current.cost_method ?? "fifo",
+++++++++++ 	};
+++++++++++ 
+++++++++++ 	await db
+++++++++++ 		.prepare(
+++++++++++ 			`UPDATE accounts SET name = ?, kind = ?, market = ?, currency = ?, icon_key = ?, icon_data = ?,
+++++++++++-			        sort = ?, archived = ?, note = ?, updated_at = ? WHERE id = ?`,
++++++++++++			        sort = ?, archived = ?, note = ?, cost_method = ?, updated_at = ? WHERE id = ?`,
+++++++++++ 		)
+++++++++++ 		.bind(
+++++++++++ 			next.name,
+++++++++++@@ -89,6 +93,7 @@ export async function updateAccount(
+++++++++++ 			next.sort,
+++++++++++ 			next.archived,
+++++++++++ 			next.note,
++++++++++++			next.cost_method,
+++++++++++ 			nowIso(),
+++++++++++ 			id,
+++++++++++ 		)
+++++++++++diff --git a/src/worker/services/backup.ts b/src/worker/services/backup.ts
+++++++++++index 0b942d4..49238de 100644
+++++++++++--- a/src/worker/services/backup.ts
++++++++++++++ b/src/worker/services/backup.ts
+++++++++++@@ -26,6 +26,8 @@ export interface AccountRecord {
+++++++++++ 	note: string | null;
+++++++++++ 	created_at: string;
+++++++++++ 	updated_at: string;
++++++++++++	/** 成本口径（独立功能 src/trades/）：fifo / weighted / diluted */
++++++++++++	cost_method?: string;
+++++++++++ }
+++++++++++ 
+++++++++++ export interface HoldingRecord {
+++++++++++@@ -288,6 +290,8 @@ export function parseBackup(input: unknown, t: Translator): { file: BackupFile;
+++++++++++ 			note: strOrNull(row.note, 200),
+++++++++++ 			created_at: iso(row.created_at, `accounts[${index}].created_at`),
+++++++++++ 			updated_at: iso(row.updated_at, `accounts[${index}].updated_at`),
++++++++++++			// 旧备份没有 cost_method 或值不合法时回退 fifo（账户口径是可选设置，不让它拦住导入）
++++++++++++			cost_method: row.cost_method === "weighted" || row.cost_method === "diluted" ? row.cost_method : "fifo",
+++++++++++ 		};
+++++++++++ 		if (!KINDS.has(record.kind)) throw badRaw(`accounts[${index}].kind invalid: ${record.kind}`);
+++++++++++ 		if (accountIds.has(record.id)) throw badRaw(`accounts duplicate id: ${record.id}`);
+++++++++++@@ -554,7 +558,7 @@ function countStatements(file: BackupFile, mode: ImportMode): number {
+++++++++++ }
+++++++++++ 
+++++++++++ const ACCOUNT_COLUMNS =
+++++++++++-	"id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, created_at, updated_at";
++++++++++++	"id, name, kind, market, currency, icon_key, icon_data, sort, archived, note, cost_method, created_at, updated_at";
+++++++++++ const HOLDING_COLUMNS =
+++++++++++ 	"id, account_id, class, market, symbol, name, currency, qty, price, avg_cost, price_updated_at, price_as_of, archived, note, created_at, updated_at";
+++++++++++ 
+++++++++++@@ -586,11 +590,11 @@ export async function applyBackup(
+++++++++++ 			? ""
+++++++++++ 			: ` ON CONFLICT(id) DO UPDATE SET name=excluded.name, kind=excluded.kind, market=excluded.market,
+++++++++++ 			    currency=excluded.currency, icon_key=excluded.icon_key, icon_data=excluded.icon_data,
+++++++++++-			    sort=excluded.sort, archived=excluded.archived, note=excluded.note, updated_at=excluded.updated_at`;
++++++++++++			    sort=excluded.sort, archived=excluded.archived, note=excluded.note, cost_method=excluded.cost_method, updated_at=excluded.updated_at`;
+++++++++++ 	for (const row of data.accounts) {
+++++++++++ 		statements.push(
+++++++++++ 			db
+++++++++++-				.prepare(`INSERT INTO accounts (${ACCOUNT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)${accountConflict}`)
++++++++++++				.prepare(`INSERT INTO accounts (${ACCOUNT_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)${accountConflict}`)
+++++++++++ 				.bind(
+++++++++++ 					row.id,
+++++++++++ 					row.name,
+++++++++++@@ -602,6 +606,7 @@ export async function applyBackup(
+++++++++++ 					row.sort,
+++++++++++ 					row.archived,
+++++++++++ 					row.note,
++++++++++++					row.cost_method ?? "fifo",
+++++++++++ 					row.created_at,
+++++++++++ 					row.updated_at,
+++++++++++ 				),
+++++++++++diff --git a/src/worker/types.ts b/src/worker/types.ts
+++++++++++index c5f51e8..be0099e 100644
+++++++++++--- a/src/worker/types.ts
++++++++++++++ b/src/worker/types.ts
+++++++++++@@ -2,6 +2,7 @@
+++++++++++  * Worker 绑定与环境类型
+++++++++++  */
+++++++++++ import type { PublicSection } from "../shared/public-sections";
++++++++++++import type { CostMethod } from "../trades/calc";
+++++++++++ 
+++++++++++ export interface Env {
+++++++++++ 	DB: D1Database;
+++++++++++@@ -46,6 +47,8 @@ export interface AccountRow {
+++++++++++ 	note: string | null;
+++++++++++ 	created_at: string;
+++++++++++ 	updated_at: string;
++++++++++++	/** 成本口径：fifo（默认）/ weighted / diluted，账户下所有持仓统一跟随（独立功能 src/trades/） */
++++++++++++	cost_method: CostMethod;
+++++++++++ }
+++++++++++ 
+++++++++++ export interface HoldingRow {
+++++++++++@@ -68,6 +71,10 @@ export interface HoldingRow {
+++++++++++ 	note: string | null;
+++++++++++ 	created_at: string;
+++++++++++ 	updated_at: string;
++++++++++++	/** 交易驱动开关：1 = qty/avg_cost/realized_pnl 由交易流水推导并锁定（独立功能） */
++++++++++++	trade_mode?: number;
++++++++++++	/** 交易驱动持仓的累计已实现盈亏 */
++++++++++++	realized_pnl?: number | null;
+++++++++++ }
+++++++++++ 
+++++++++++ /** Hono 环境类型 */
+++++++++++diff --git a/tests/api/custom-nav.test.ts b/tests/api/custom-nav.test.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..37a72c2
+++++++++++--- /dev/null
++++++++++++++ b/tests/api/custom-nav.test.ts
+++++++++++@@ -0,0 +1,78 @@
++++++++++++import { env } from "cloudflare:test";
++++++++++++import { beforeEach, describe, expect, it } from "vitest";
++++++++++++import { bootstrap, call, clearAll } from "../helpers";
++++++++++++
++++++++++++interface Envelope<T> {
++++++++++++	ok: boolean;
++++++++++++	data: T;
++++++++++++}
++++++++++++
++++++++++++const NAV = "/api/custom-nav";
++++++++++++
++++++++++++describe("自定义导航菜单（src/custom-nav/）", () => {
++++++++++++	beforeEach(async () => {
++++++++++++		await clearAll();
++++++++++++	});
++++++++++++
++++++++++++	it("已初始化但未登录（公开只读默认关闭）返回 401", async () => {
++++++++++++		await bootstrap();
++++++++++++		const response = await call(NAV);
++++++++++++		expect(response.status).toBe(401);
++++++++++++	});
++++++++++++
++++++++++++	it("初始为空列表，PUT 后可读回，且可整体覆盖", async () => {
++++++++++++		const { cookie } = await bootstrap();
++++++++++++
++++++++++++		const empty = await call<Envelope<{ items: unknown[] }>>(NAV, { cookie });
++++++++++++		expect(empty.status).toBe(200);
++++++++++++		expect(empty.body.data.items).toEqual([]);
++++++++++++
++++++++++++		const items = [
++++++++++++			{ id: "panel-a", name: "我的面板", url: "https://example.com/panel", mode: "embed" },
++++++++++++			{ id: "docs-b", name: "文档", url: "https://example.org/docs", mode: "tab" },
++++++++++++		];
++++++++++++		const saved = await call<Envelope<{ items: unknown[] }>>(NAV, {
++++++++++++			method: "PUT",
++++++++++++			cookie,
++++++++++++			body: JSON.stringify({ items }),
++++++++++++		});
++++++++++++		expect(saved.status).toBe(200);
++++++++++++		expect(saved.body.data.items).toEqual(items);
++++++++++++
++++++++++++		const fetched = await call<Envelope<{ items: unknown[] }>>(NAV, { cookie });
++++++++++++		expect(fetched.body.data.items).toEqual(items);
++++++++++++
++++++++++++		// 覆盖为只保留一项
++++++++++++		const replaced = await call<Envelope<{ items: unknown[] }>>(NAV, {
++++++++++++			method: "PUT",
++++++++++++			cookie,
++++++++++++			body: JSON.stringify({ items: items.slice(0, 1) }),
++++++++++++		});
++++++++++++		expect(replaced.status).toBe(200);
++++++++++++		const afterReplace = await call<Envelope<{ items: unknown[] }>>(NAV, { cookie });
++++++++++++		expect(afterReplace.body.data.items).toHaveLength(1);
++++++++++++	});
++++++++++++
++++++++++++	it("拒绝非法地址 / 空名称 / 非法 id", async () => {
++++++++++++		const { cookie } = await bootstrap();
++++++++++++		const base = { id: "a1", name: "x", url: "https://example.com", mode: "embed" };
++++++++++++
++++++++++++		const badUrl = await call(NAV, { method: "PUT", cookie, body: JSON.stringify({ items: [{ ...base, url: "javascript:alert(1)" }] }) });
++++++++++++		expect(badUrl.status).toBe(400);
++++++++++++
++++++++++++		const badName = await call(NAV, { method: "PUT", cookie, body: JSON.stringify({ items: [{ ...base, name: "  " }] }) });
++++++++++++		expect(badName.status).toBe(400);
++++++++++++
++++++++++++		const badId = await call(NAV, { method: "PUT", cookie, body: JSON.stringify({ items: [{ ...base, id: "../evil" }] }) });
++++++++++++		expect(badId.status).toBe(400);
++++++++++++	});
++++++++++++
++++++++++++	it("settings 表里只存一条 custom_nav_items，无需迁移", async () => {
++++++++++++		const { cookie } = await bootstrap();
++++++++++++		const items = [{ id: "only", name: "仅此一项", url: "https://example.com", mode: "embed" }];
++++++++++++		await call(NAV, { method: "PUT", cookie, body: JSON.stringify({ items }) });
++++++++++++
++++++++++++		const envRow = await env.DB.prepare(`SELECT value FROM settings WHERE key = 'custom_nav_items'`).first<{ value: string }>();
++++++++++++		expect(envRow?.value).toBe(JSON.stringify(items));
++++++++++++	});
++++++++++++});
+++++++++++diff --git a/tests/trades/calc.test.ts b/tests/trades/calc.test.ts
+++++++++++new file mode 100644
+++++++++++index 0000000..a52a8ee
+++++++++++--- /dev/null
++++++++++++++ b/tests/trades/calc.test.ts
+++++++++++@@ -0,0 +1,257 @@
++++++++++++import { describe, expect, it } from "vitest";
++++++++++++import { computeDiluted, computeFifo, computeWeighted, checkTradeValid, type TradeLike } from "../../src/trades/calc";
++++++++++++
++++++++++++/** 便捷构造交易 */
++++++++++++function trade(partial: Partial<TradeLike>): TradeLike {
++++++++++++	return { id: "t", side: "buy", qty: 0, price: 0, fee: 0, traded_at: "2026-01-01", ...partial };
++++++++++++}
++++++++++++
++++++++++++describe("FIFO 逐笔法核心核算", () => {
++++++++++++	it("单笔买入：平均成本 = 含手续费的单价", () => {
++++++++++++		const state = computeFifo([trade({ id: "a", side: "buy", qty: 100, price: 10, fee: 5 })]);
++++++++++++		expect(state.qty).toBe(100);
++++++++++++		expect(state.avgCost).toBeCloseTo(10.05, 6); // (100*10+5)/100
++++++++++++		expect(state.realizedPnl).toBe(0);
++++++++++++		expect(state.lots).toHaveLength(1);
++++++++++++	});
++++++++++++
++++++++++++	it("多次加仓：按量加权的平均成本", () => {
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(200);
++++++++++++		expect(state.avgCost).toBeCloseTo(15, 6); // (1000+2000)/200
++++++++++++		expect(state.lots).toHaveLength(2);
++++++++++++	});
++++++++++++
++++++++++++	it("部分卖出：先消耗最早批，剩余成本由后批构成", () => {
++++++++++++		// 先买 100@10，再买 100@20，再卖 50
++++++++++++		// FIFO 消耗最早 100@10 中的 50 → 剩余 50@10 + 100@20 = 150 股
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 30 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(150);
++++++++++++		expect(state.avgCost).toBeCloseTo((50 * 10 + 100 * 20) / 150, 6); // 16.666…
++++++++++++		// 已实现盈亏：卖出 50 收入 1500 − 成本 50*10=500 → 1000
++++++++++++		expect(state.realizedPnl).toBeCloseTo(1000, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("全卖完：剩余批次清空，已实现盈亏完整结算", () => {
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 200, price: 15 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(0);
++++++++++++		expect(state.avgCost).toBeNull();
++++++++++++		expect(state.lots).toHaveLength(0);
++++++++++++		// 收入 200*15=3000 − 成本 1000+2000=3000 → 0
++++++++++++		expect(state.realizedPnl).toBeCloseTo(0, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("卖出手续费从收入中扣除（降低已实现盈亏）", () => {
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 100, price: 12, fee: 50 }),
++++++++++++		]);
++++++++++++		// 收入 1200−50=1150 − 成本 1000 → 150
++++++++++++		expect(state.realizedPnl).toBeCloseTo(150, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("买入手续费摊入批次成本，部分卖出按比例分摊", () => {
++++++++++++		// 买 100@10 手续费 10 → 批成本 1010；卖 50 → 成本被取走 505
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10, fee: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 12 }),
++++++++++++		]);
++++++++++++		expect(state.realizedPnl).toBeCloseTo(50 * 12 - 505, 6); // 95
++++++++++++		expect(state.qty).toBe(50);
++++++++++++		expect(state.cost).toBeCloseTo(505, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("按 traded_at 排序，同一天按 id 二次排序（可复现）", () => {
++++++++++++		// 先卖(a)后买(b)日期相同，但同 id 排序后应为 b 在前？这里验证"b 先买"仍正确：按 traded_at 相同时用 id
++++++++++++		// 构造：卖 50 在买 100 之前出现，但因为日期相同、id 字典序 b < s，交易会被排成 b, s
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 30, traded_at: "2026-01-01" }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 10, traded_at: "2026-01-01" }),
++++++++++++		]);
++++++++++++		// 若先按 b,s 处理 → 买100@10 再卖50 → 剩 50
++++++++++++		expect(state.qty).toBe(50);
++++++++++++		expect(state.oversoldQty).toBe(0);
++++++++++++		expect(state.realizedPnl).toBeGreaterThan(0);
++++++++++++	});
++++++++++++
++++++++++++	it("卖出超过剩余持仓：记录 oversoldQty 但不崩溃", () => {
++++++++++++		const state = computeFifo([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 150, price: 12 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(0);
++++++++++++		expect(state.oversoldQty).toBeCloseTo(50, 6);
++++++++++++	});
++++++++++++});
++++++++++++
++++++++++++describe("checkTradeValid（写入前校验）", () => {
++++++++++++	const current: TradeLike[] = [
++++++++++++		trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++		trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++	];
++++++++++++
++++++++++++	it("买入追加合法", () => {
++++++++++++		expect(checkTradeValid(current, "c", trade({ id: "c", side: "buy", qty: 50, price: 15 }))).toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("卖出不超过持仓合法", () => {
++++++++++++		expect(checkTradeValid(current, "c", trade({ id: "c", side: "sell", qty: 150, price: 20 }))).toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("卖出超过持仓被拒绝", () => {
++++++++++++		expect(checkTradeValid(current, "c", trade({ id: "c", side: "sell", qty: 250, price: 20 }))).not.toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("修改历史交易导致超额卖出被拒绝", () => {
++++++++++++		// 把 a 改成只买 50，则总持仓 150，卖 150 正好；再改成卖太多会触发
++++++++++++		const changed = trade({ id: "a", side: "buy", qty: 50, price: 10 });
++++++++++++		expect(checkTradeValid(current, "a", changed)).toBeNull();
++++++++++++		const tooBig = trade({ id: "a", side: "sell", qty: 300, price: 20 });
++++++++++++		expect(checkTradeValid(current, "a", tooBig)).not.toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("删除历史买入导致超额卖出被拒绝", () => {
++++++++++++		// a:100@10 + b:100@20 + 卖出 150：删掉 b 后只剩 100@10，卖出 150 会超额
++++++++++++		const existing = [
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 150, price: 12 }),
++++++++++++		];
++++++++++++		expect(checkTradeValid(existing, "b", null)).not.toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("删除不会导致超额的交易合法", () => {
++++++++++++		const existing = [
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 12 }),
++++++++++++		];
++++++++++++		expect(checkTradeValid(existing, "s", null)).toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("数量为 0 或负数被拒绝", () => {
++++++++++++		expect(checkTradeValid(current, "c", trade({ id: "c", side: "buy", qty: 0, price: 10 }))).not.toBeNull();
++++++++++++		expect(checkTradeValid(current, "c", trade({ id: "c", side: "buy", qty: -5, price: 10 }))).not.toBeNull();
++++++++++++	});
++++++++++++});
++++++++++++
++++++++++++describe("移动加权平均（weighted）", () => {
++++++++++++	it("买入加权：均价 = 含费总成本 ÷ 总数量", () => {
++++++++++++		const state = computeWeighted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10, fee: 5 }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(200);
++++++++++++		expect(state.avgCost).toBeCloseTo((1005 + 2000) / 200, 6); // 15.025
++++++++++++		expect(state.lots).toHaveLength(0);
++++++++++++	});
++++++++++++
++++++++++++	it("卖出不改均价，已实现盈亏单独结算", () => {
++++++++++++		// 买 100@10 再买 100@20 → 均价 15；卖 50@30 → 已实现 = 1500 − 50*15 = 750
++++++++++++		const state = computeWeighted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 30 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(150);
++++++++++++		expect(state.avgCost).toBeCloseTo(15, 6);
++++++++++++		expect(state.realizedPnl).toBeCloseTo(750, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("清仓后均价置空，重新买入从新价起算", () => {
++++++++++++		const state = computeWeighted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10, traded_at: "2026-01-01" }),
++++++++++++			trade({ id: "s", side: "sell", qty: 100, price: 12, traded_at: "2026-01-02" }),
++++++++++++			trade({ id: "b", side: "buy", qty: 100, price: 20, traded_at: "2026-01-03" }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(100);
++++++++++++		expect(state.avgCost).toBeCloseTo(20, 6);
++++++++++++		expect(state.realizedPnl).toBeCloseTo(200, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("卖出手续费从收入中扣除", () => {
++++++++++++		const state = computeWeighted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 100, price: 12, fee: 50 }),
++++++++++++		]);
++++++++++++		expect(state.realizedPnl).toBeCloseTo(1150 - 1000, 6); // 150
++++++++++++	});
++++++++++++
++++++++++++	it("卖出超过持仓：记录 oversoldQty 但不崩溃", () => {
++++++++++++		const state = computeWeighted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 150, price: 12 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(0);
++++++++++++		expect(state.avgCost).toBeNull();
++++++++++++		expect(state.oversoldQty).toBeCloseTo(50, 6);
++++++++++++	});
++++++++++++});
++++++++++++
++++++++++++describe("摊薄成本法（diluted）", () => {
++++++++++++	it("avg_cost = (Σ买入含费 − Σ卖出净额) ÷ 当前量", () => {
++++++++++++		// 买 1000@28 手续费 3 → 买入 28003；卖 400@28 手续费 2 → 卖出净额 11198
++++++++++++		// avg = (28003 − 11198) / 600 = 28.008333…
++++++++++++		const state = computeDiluted([
++++++++++++			trade({ id: "a", side: "buy", qty: 1000, price: 28, fee: 3 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 400, price: 28, fee: 2 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(600);
++++++++++++		expect(state.avgCost).toBeCloseTo((28003 - 11198) / 600, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("已实现盈亏恒为 0（盈亏已融入成本）", () => {
++++++++++++		const state = computeDiluted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 30 }),
++++++++++++		]);
++++++++++++		expect(state.realizedPnl).toBe(0);
++++++++++++		expect(state.qty).toBe(50);
++++++++++++	});
++++++++++++
++++++++++++	it("清仓后均价置空显示 —", () => {
++++++++++++		const state = computeDiluted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 100, price: 12 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(0);
++++++++++++		expect(state.avgCost).toBeNull();
++++++++++++	});
++++++++++++
++++++++++++	it("卖出影响剩余成本（摊薄）", () => {
++++++++++++		// 买 100@10 → 成本 1000；卖 50@12 → 摊薄后 avg = (1000 − 600) / 50 = 8
++++++++++++		const state = computeDiluted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 12 }),
++++++++++++		]);
++++++++++++		expect(state.avgCost).toBeCloseTo(8, 6);
++++++++++++	});
++++++++++++
++++++++++++	it("买入手续费抬高成本、卖出手续费进一步摊薄", () => {
++++++++++++		const state = computeDiluted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10, fee: 10 }), // 买入 1010
++++++++++++			trade({ id: "s", side: "sell", qty: 50, price: 12, fee: 5 }), // 卖出净额 595
++++++++++++		]);
++++++++++++		expect(state.avgCost).toBeCloseTo((1010 - 595) / 50, 6); // 8.3
++++++++++++	});
++++++++++++
++++++++++++	it("卖出超过持仓：记录 oversoldQty 但不崩溃", () => {
++++++++++++		const state = computeDiluted([
++++++++++++			trade({ id: "a", side: "buy", qty: 100, price: 10 }),
++++++++++++			trade({ id: "s", side: "sell", qty: 150, price: 12 }),
++++++++++++		]);
++++++++++++		expect(state.qty).toBe(0);
++++++++++++		expect(state.avgCost).toBeNull();
++++++++++++		expect(state.oversoldQty).toBeCloseTo(50, 6);
++++++++++++	});
++++++++++++});
+++++++++++\ No newline at end of file
++++++++++diff --git a/custom-patches/restore.ps1 b/custom-patches/restore.ps1
 +++++++++new file mode 100644
 +++++++++index 0000000..9f93dce
 +++++++++--- /dev/null
@@ -361,11 +3541,12 @@ index 0000000..da46719
 ++++++++++}
 +++++++++diff --git a/src/custom-nav/ui/CustomNav.tsx b/src/custom-nav/ui/CustomNav.tsx
 +++++++++new file mode 100644
-+++++++++index 0000000..4b247ec
++++++++++index 0000000..14ac4d3
 +++++++++--- /dev/null
 ++++++++++++ b/src/custom-nav/ui/CustomNav.tsx
-+++++++++@@ -0,0 +1,61 @@
++++++++++@@ -0,0 +1,67 @@
 ++++++++++import { useState } from "react";
+++++++++++import { createPortal } from "react-dom";
 ++++++++++import { Link, useRouter } from "../../web/lib/router";
 ++++++++++import { useAsync } from "../../web/lib/useAsync";
 ++++++++++import { useT } from "../../web/lib/i18n";
@@ -413,16 +3594,21 @@ index 0000000..da46719
 ++++++++++					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
 ++++++++++				</svg>
 ++++++++++			</button>
-++++++++++			{managing && (
-++++++++++				<ManagePanel
-++++++++++					items={items}
-++++++++++					onClose={() => setManaging(false)}
-++++++++++					onSaved={(next: CustomNavItem[]) => {
-++++++++++						setData(next);
-++++++++++						setManaging(false);
-++++++++++					}}
-++++++++++				/>
-++++++++++			)}
+++++++++++			{managing &&
+++++++++++				// 必须用 Portal 渲染到 document.body：
+++++++++++				// .topbar 有 backdrop-filter，会给 position:fixed 建立包含块，
+++++++++++				// 不逃出去的话弹窗会被锁在顶栏那一小块里（表现为小 iframe + 滚动条）。
+++++++++++				createPortal(
+++++++++++					<ManagePanel
+++++++++++						items={items}
+++++++++++						onClose={() => setManaging(false)}
+++++++++++						onSaved={(next: CustomNavItem[]) => {
+++++++++++							setData(next);
+++++++++++							setManaging(false);
+++++++++++						}}
+++++++++++					/>,
+++++++++++					document.body,
+++++++++++				)}
 ++++++++++		</>
 ++++++++++	);
 ++++++++++}
@@ -716,7 +3902,7 @@ index 0000000..da46719
 ++++++++++};
 +++++++++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 +++++++++new file mode 100644
-+++++++++index 0000000..b687b42
++++++++++index 0000000..cbf0188
 +++++++++--- /dev/null
 ++++++++++++ b/src/custom-nav/ui/custom-nav.css
 +++++++++@@ -0,0 +1,176 @@
@@ -747,7 +3933,7 @@ index 0000000..da46719
 ++++++++++	align-items: flex-start;
 ++++++++++	justify-content: center;
 ++++++++++	padding: 48px 16px;
-++++++++++	z-index: 50;
+++++++++++	z-index: 9999;
 ++++++++++	overflow: auto;
 ++++++++++}
 ++++++++++
@@ -3458,10 +6644,10 @@ index 0000000..da46719
 +++++++++export default customNav;
 ++++++++diff --git a/src/custom-nav/types.ts b/src/custom-nav/types.ts
 ++++++++new file mode 100644
-++++++++index 0000000..25170e5
+++++++++index 0000000..78354eb
 ++++++++--- /dev/null
 +++++++++++ b/src/custom-nav/types.ts
-++++++++@@ -0,0 +1,71 @@
+++++++++@@ -0,0 +1,72 @@
 +++++++++/**
 +++++++++ * 自定义导航菜单 —— 独立功能（src/custom-nav/）
 +++++++++ *
@@ -3517,7 +6703,8 @@ index 0000000..da46719
 +++++++++	const name = typeof entry.name === "string" ? entry.name.trim() : "";
 +++++++++	const url = typeof entry.url === "string" ? entry.url.trim() : "";
 +++++++++	const mode = entry.mode === "tab" ? "tab" : "embed";
-+++++++++	if (!/^[a-zA-Z0-9-]{1,32}$/.test(id)) return null;
++++++++++	// id 格式校验：字母数字与连字符，最长 40（前端生成 16 位短 id，放宽上限兜底历史数据）
++++++++++	if (!/^[a-zA-Z0-9-]{1,40}$/.test(id)) return null;
 +++++++++	if (!name || name.length > CUSTOM_NAV_NAME_MAX) return null;
 +++++++++	if (!url || url.length > CUSTOM_NAV_URL_MAX) return null;
 +++++++++	try {
@@ -3666,10 +6853,10 @@ index 0000000..da46719
 +++++++++}
 ++++++++diff --git a/src/custom-nav/ui/ManagePanel.tsx b/src/custom-nav/ui/ManagePanel.tsx
 ++++++++new file mode 100644
-++++++++index 0000000..9f3a4a1
+++++++++index 0000000..40fd52f
 ++++++++--- /dev/null
 +++++++++++ b/src/custom-nav/ui/ManagePanel.tsx
-++++++++@@ -0,0 +1,168 @@
+++++++++@@ -0,0 +1,172 @@
 +++++++++import { useState } from "react";
 +++++++++import type { CustomNavItem, CustomNavMode } from "../types";
 +++++++++import { saveNavItems } from "./store";
@@ -3682,7 +6869,11 @@ index 0000000..da46719
 +++++++++	onSaved: (items: CustomNavItem[]) => void;
 +++++++++}
 +++++++++
-+++++++++const newId = () => (crypto?.randomUUID?.() ?? `nav-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
++++++++++// 生成短 id（≤32 字符）：完整 UUID 有 36 位，会超服务端 id 长度上限导致保存被拒
++++++++++const newId = () =>
++++++++++	crypto?.randomUUID?.()
++++++++++		? crypto.randomUUID().replace(/-/g, "").slice(0, 16)
++++++++++		: `nav-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 +++++++++
 +++++++++export function ManagePanel({ items, onClose, onSaved }: Props) {
 +++++++++	const t = navText(useT().lang);
@@ -6060,10 +9251,10 @@ index 0000000..da46719
 ++++++++ /** Hono 环境类型 */
 ++++++++diff --git a/tests/api/custom-nav.test.ts b/tests/api/custom-nav.test.ts
 ++++++++new file mode 100644
-++++++++index 0000000..37a72c2
+++++++++index 0000000..fbcbdd8
 ++++++++--- /dev/null
 +++++++++++ b/tests/api/custom-nav.test.ts
-++++++++@@ -0,0 +1,78 @@
+++++++++@@ -0,0 +1,91 @@
 +++++++++import { env } from "cloudflare:test";
 +++++++++import { beforeEach, describe, expect, it } from "vitest";
 +++++++++import { bootstrap, call, clearAll } from "../helpers";
@@ -6131,6 +9322,19 @@ index 0000000..da46719
 +++++++++
 +++++++++		const badId = await call(NAV, { method: "PUT", cookie, body: JSON.stringify({ items: [{ ...base, id: "../evil" }] }) });
 +++++++++		expect(badId.status).toBe(400);
++++++++++	});
++++++++++
++++++++++	it("接受 36 位完整 UUID 样式的 id（前端曾用它导致保存被拒的回归用例）", async () => {
++++++++++		const { cookie } = await bootstrap();
++++++++++		const uuid = "518cc80b-0609-8474-3d9d-535751d16839";
++++++++++		const saved = await call<Envelope<{ items: unknown[] }>>(NAV, {
++++++++++			method: "PUT",
++++++++++			cookie,
++++++++++			body: JSON.stringify({ items: [{ id: uuid, name: "驾驶舱", url: "https://memos.tianrong.ltd/embed/stocks?token=abc&w=1200", mode: "embed" }] }),
++++++++++		});
++++++++++		expect(saved.status).toBe(200);
++++++++++		expect(saved.body.data.items).toHaveLength(1);
++++++++++		expect(saved.body.data.items[0]).toMatchObject({ id: uuid, name: "驾驶舱" });
 +++++++++	});
 +++++++++
 +++++++++	it("settings 表里只存一条 custom_nav_items，无需迁移", async () => {
@@ -6789,10 +9993,11 @@ index 0000000..da46719
 ++++++++}
 +++++++diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
 +++++++new file mode 100644
-+++++++index 0000000..cd3bd50
++++++++index 0000000..afc0f69
 +++++++--- /dev/null
 ++++++++++ b/src/custom-nav/ui/CustomNavPage.tsx
-+++++++@@ -0,0 +1,52 @@
++++++++@@ -0,0 +1,84 @@
+++++++++import { useEffect, useRef, useState } from "react";
 ++++++++import { useRouter } from "../../web/lib/router";
 ++++++++import { useAsync } from "../../web/lib/useAsync";
 ++++++++import { useT } from "../../web/lib/i18n";
@@ -6805,7 +10010,8 @@ index 0000000..da46719
 ++++++++ *
 ++++++++ * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
 ++++++++ * 顶部导航栏保持原样，看起来就是当前应用的一部分。
-++++++++ * 目标网站若拒绝被嵌入（X-Frame-Options / CSP），工具栏提供新标签兜底。
+++++++++ * 目标网站若拒绝被嵌入（X-Frame-Options / CSP），iframe 不会触发任何事件，
+++++++++ * 用超时兜底检测：超过 5 秒仍未加载则提示，并提供新标签打开。
 ++++++++ */
 ++++++++export function CustomNavPage() {
 ++++++++	const { path } = useRouter();
@@ -6813,6 +10019,20 @@ index 0000000..da46719
 ++++++++	const id = path.split("/")[2] ?? "";
 ++++++++	const { data } = useAsync(() => getNavItems(), []);
 ++++++++	const item = data?.find((entry) => entry.id === id);
+++++++++
+++++++++	const [stuck, setStuck] = useState(false);
+++++++++	const loadedRef = useRef(false);
+++++++++
+++++++++	useEffect(() => {
+++++++++		if (!item || item.mode !== "embed") return;
+++++++++		loadedRef.current = false;
+++++++++		setStuck(false);
+++++++++		const timer = window.setTimeout(() => {
+++++++++			// X-Frame-Options 拦截时 iframe 不发 load/error 事件，只能靠超时兜底
+++++++++			if (!loadedRef.current) setStuck(true);
+++++++++		}, 5000);
+++++++++		return () => window.clearTimeout(timer);
+++++++++	}, [item?.id, item?.url]);
 ++++++++
 ++++++++	if (item && item.mode === "embed") {
 ++++++++		return (
@@ -6824,7 +10044,23 @@ index 0000000..da46719
 ++++++++					</a>
 ++++++++				</div>
 ++++++++				<div className="cnav-frame">
-++++++++					<iframe title={item.name} src={item.url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals" />
+++++++++					<iframe
+++++++++						title={item.name}
+++++++++						src={item.url}
+++++++++						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
+++++++++						onLoad={() => {
+++++++++							loadedRef.current = true;
+++++++++							setStuck(false);
+++++++++						}}
+++++++++					/>
+++++++++					{stuck && (
+++++++++						<div className="cnav-stuck">
+++++++++							<p>{t.embedBlocked}</p>
+++++++++							<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
+++++++++								{t.openTab}
+++++++++							</a>
+++++++++						</div>
+++++++++					)}
 ++++++++				</div>
 ++++++++			</div>
 ++++++++		);
@@ -7081,10 +10317,10 @@ index 0000000..da46719
 ++++++++};
 +++++++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 +++++++new file mode 100644
-+++++++index 0000000..cbf0188
++++++++index 0000000..6b98404
 +++++++--- /dev/null
 ++++++++++ b/src/custom-nav/ui/custom-nav.css
-+++++++@@ -0,0 +1,176 @@
++++++++@@ -0,0 +1,195 @@
 ++++++++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 ++++++++.cnav-gear {
 ++++++++	display: inline-flex;
@@ -7250,6 +10486,7 @@ index 0000000..da46719
 ++++++++	white-space: nowrap;
 ++++++++}
 ++++++++.cnav-frame {
+++++++++	position: relative;
 ++++++++	width: 100%;
 ++++++++}
 ++++++++.cnav-frame iframe {
@@ -7260,6 +10497,24 @@ index 0000000..da46719
 ++++++++	border-radius: var(--radius);
 ++++++++	background: #fff;
 ++++++++	display: block;
+++++++++}
+++++++++.cnav-stuck {
+++++++++	position: absolute;
+++++++++	inset: 0;
+++++++++	display: flex;
+++++++++	flex-direction: column;
+++++++++	align-items: center;
+++++++++	justify-content: center;
+++++++++	gap: 12px;
+++++++++	padding: 24px;
+++++++++	text-align: center;
+++++++++	background: var(--surface);
+++++++++	color: var(--muted);
+++++++++	border-radius: var(--radius);
+++++++++}
+++++++++.cnav-stuck p {
+++++++++	margin: 0;
+++++++++	max-width: 460px;
 ++++++++}
 +++++++diff --git a/src/custom-nav/ui/store.ts b/src/custom-nav/ui/store.ts
 +++++++new file mode 100644
@@ -7296,10 +10551,10 @@ index 0000000..da46719
 ++++++++}
 +++++++diff --git a/src/custom-nav/ui/text.ts b/src/custom-nav/ui/text.ts
 +++++++new file mode 100644
-+++++++index 0000000..0c837bb
++++++++index 0000000..5b6a80c
 +++++++--- /dev/null
 ++++++++++ b/src/custom-nav/ui/text.ts
-+++++++@@ -0,0 +1,87 @@
++++++++@@ -0,0 +1,90 @@
 ++++++++/**
 ++++++++ * 自定义导航 —— 自包含双语文案
 ++++++++ *
@@ -7328,6 +10583,7 @@ index 0000000..da46719
 ++++++++	empty: string;
 ++++++++	notFound: string;
 ++++++++	openTab: string;
+++++++++	embedBlocked: string;
 ++++++++	nameRequired: string;
 ++++++++	invalidUrl: string;
 ++++++++	itemsCount: (n: number) => string;
@@ -7354,6 +10610,7 @@ index 0000000..da46719
 ++++++++		empty: "还没有自定义菜单",
 ++++++++		notFound: "找不到该自定义菜单",
 ++++++++		openTab: "在新标签打开",
+++++++++		embedBlocked: "该网站拒绝了嵌入显示（服务端设置了 X-Frame-Options / frame-ancestors），请在新标签打开，或在服务端放开嵌入限制。",
 ++++++++		nameRequired: "请输入菜单名称",
 ++++++++		invalidUrl: "请输入有效的 http(s) 地址",
 ++++++++		itemsCount: (n: number) => (n ? `共 ${n} 项` : ""),
@@ -7378,6 +10635,7 @@ index 0000000..da46719
 ++++++++		empty: "No custom menus yet",
 ++++++++		notFound: "Custom menu not found",
 ++++++++		openTab: "Open in new tab",
+++++++++		embedBlocked: "This site refused to be embedded (server sends X-Frame-Options / frame-ancestors). Open in a new tab, or relax the embedding restriction on the server.",
 ++++++++		nameRequired: "Please enter a menu name",
 ++++++++		invalidUrl: "Please enter a valid http(s) URL",
 ++++++++		itemsCount: (n: number) => (n ? `${n} item(s)` : ""),
@@ -8848,9 +12106,15 @@ index 0000000..da46719
 ++++++++	disable: (holdingId: string) => request<TradesView>(`/api/holdings/${holdingId}/trades/disable`, json({})),
 ++++++++};
 +++++++diff --git a/src/web/App.tsx b/src/web/App.tsx
-+++++++index 7853770..95f4de5 100644
++++++++index 7853770..8c110ee 100644
 +++++++--- a/src/web/App.tsx
 ++++++++++ b/src/web/App.tsx
++++++++@@ -1,4 +1,4 @@
++++++++-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+++++++++import { Fragment, lazy, Suspense, useCallback, useEffect, useState } from "react";
++++++++ import { api, type AuthMeDto } from "./lib/api";
++++++++ import { useAsync } from "./lib/useAsync";
++++++++ import { Link, RouterProvider, useRouter } from "./lib/router";
 +++++++@@ -18,6 +18,11 @@ const AccountsPage = lazy(() => import("./pages/Accounts").then((module) => ({ d
 +++++++ const HoldingsPage = lazy(() => import("./pages/Holdings").then((module) => ({ default: module.HoldingsPage })));
 +++++++ const HistoryPage = lazy(() => import("./pages/History").then((module) => ({ default: module.HistoryPage })));
@@ -8872,14 +12136,25 @@ index 0000000..da46719
 +++++++ 		if (path.startsWith("/accounts")) return <AccountsPage />;
 +++++++ 		if (path.startsWith("/holdings")) return <HoldingsPage />;
 +++++++ 		if (path.startsWith("/history")) return <HistoryPage />;
-+++++++@@ -54,6 +61,7 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
-+++++++ 							{t(item.key)}
-+++++++ 						</Link>
++++++++@@ -49,10 +56,14 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
++++++++ 			<div className="topbar">
++++++++ 				<span className="brand">{t("app.name")}</span>
++++++++ 				<nav className="nav">
++++++++-					{NAV.map((item) => (
++++++++-						<Link key={item.to} to={item.to} className={path === item.to ? "active" : ""}>
++++++++-							{t(item.key)}
++++++++-						</Link>
+++++++++					{NAV.map((item, index) => (
+++++++++						<Fragment key={item.to}>
+++++++++							<Link to={item.to} className={path === item.to ? "active" : ""}>
+++++++++								{t(item.key)}
+++++++++							</Link>
+++++++++							{/* 独立功能：自定义导航菜单紧跟"总览"之后显示 */}
+++++++++							{index === 0 && <CustomNav />}
+++++++++						</Fragment>
 +++++++ 					))}
-++++++++					<CustomNav />
 +++++++ 				</nav>
 +++++++ 				<div className="spacer" />
-+++++++ 				<button
 +++++++diff --git a/src/web/pages/Accounts.tsx b/src/web/pages/Accounts.tsx
 +++++++index 4d51f21..ad94852 100644
 +++++++--- a/src/web/pages/Accounts.tsx
@@ -9914,16 +13189,16 @@ index 0000000..da46719
 +++++++}
 ++++++diff --git a/src/custom-nav/ui/CustomNav.tsx b/src/custom-nav/ui/CustomNav.tsx
 ++++++new file mode 100644
-++++++index 0000000..14ac4d3
+++++++index 0000000..5e49868
 ++++++--- /dev/null
 +++++++++ b/src/custom-nav/ui/CustomNav.tsx
-++++++@@ -0,0 +1,67 @@
-+++++++import { useState } from "react";
+++++++@@ -0,0 +1,85 @@
++++++++import { useEffect, useState } from "react";
 +++++++import { createPortal } from "react-dom";
 +++++++import { Link, useRouter } from "../../web/lib/router";
 +++++++import { useAsync } from "../../web/lib/useAsync";
 +++++++import { useT } from "../../web/lib/i18n";
-+++++++import { getNavItems } from "./store";
++++++++import { getNavItems, subscribeNav } from "./store";
 +++++++import { navText } from "./text";
 +++++++import { ManagePanel } from "./ManagePanel";
 +++++++import type { CustomNavItem } from "../types";
@@ -9933,18 +13208,26 @@ index 0000000..da46719
 +++++++ * 顶栏自定义导航（渲染进 App.tsx 的 <nav>，纯追加式接线）
 +++++++ *
 +++++++ * embed 模式走站内路由 /custom/:id（由 CustomNavPage 用 iframe 嵌入应用壳）；
-+++++++ * tab 模式直接新标签打开。末尾的齿轮按钮打开全局管理面板。
++++++++ * tab 模式直接新标签打开。两个子组件分开挂载：
++++++++ * - CustomNavLinks：菜单链接，紧跟"总览"之后
++++++++ * - CustomNavGear：齿轮（管理入口），放在"设置"之后
 +++++++ */
-+++++++export function CustomNav() {
++++++++export function CustomNavLinks() {
 +++++++	const { path } = useRouter();
-+++++++	const t = navText(useT().lang);
 +++++++	const { data, setData } = useAsync(() => getNavItems(), []);
-+++++++	const [managing, setManaging] = useState(false);
-+++++++	const items = data ?? [];
++++++++
++++++++	// 管理面板保存后订阅通知，重新拉取并刷新链接
++++++++	useEffect(
++++++++		() =>
++++++++			subscribeNav(() => {
++++++++				getNavItems(true).then(setData).catch(() => undefined);
++++++++			}),
++++++++		[setData],
++++++++	);
 +++++++
 +++++++	return (
 +++++++		<>
-+++++++			{items.map((item) =>
++++++++			{(data ?? []).map((item) =>
 +++++++				item.mode === "tab" ? (
 +++++++					<a
 +++++++						key={item.id}
@@ -9961,6 +13244,19 @@ index 0000000..da46719
 +++++++					</Link>
 +++++++				),
 +++++++			)}
++++++++		</>
++++++++	);
++++++++}
++++++++
++++++++/** 齿轮管理入口 + 全局管理面板（Portal 到 body，避免被顶栏 backdrop-filter 的包含块截断） */
++++++++export function CustomNavGear() {
++++++++	const t = navText(useT().lang);
++++++++	const { data, setData } = useAsync(() => getNavItems(), []);
++++++++	const [managing, setManaging] = useState(false);
++++++++	const items = data ?? [];
++++++++
++++++++	return (
++++++++		<>
 +++++++			<button type="button" className="cnav-gear" title={t.manage} aria-label={t.manage} onClick={() => setManaging(true)}>
 +++++++				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 +++++++					<circle cx="12" cy="12" r="3" />
@@ -9968,9 +13264,6 @@ index 0000000..da46719
 +++++++				</svg>
 +++++++			</button>
 +++++++			{managing &&
-+++++++				// 必须用 Portal 渲染到 document.body：
-+++++++				// .topbar 有 backdrop-filter，会给 position:fixed 建立包含块，
-+++++++				// 不逃出去的话弹窗会被锁在顶栏那一小块里（表现为小 iframe + 滚动条）。
 +++++++				createPortal(
 +++++++					<ManagePanel
 +++++++						items={items}
@@ -10311,10 +13604,10 @@ index 0000000..da46719
 +++++++};
 ++++++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 ++++++new file mode 100644
-++++++index 0000000..6b98404
+++++++index 0000000..9c5b3d4
 ++++++--- /dev/null
 +++++++++ b/src/custom-nav/ui/custom-nav.css
-++++++@@ -0,0 +1,195 @@
+++++++@@ -0,0 +1,199 @@
 +++++++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 +++++++.cnav-gear {
 +++++++	display: inline-flex;
@@ -10467,6 +13760,7 @@ index 0000000..da46719
 +++++++	gap: 8px;
 +++++++}
 +++++++.cnav-toolbar {
++++++++	flex: 0 0 auto;
 +++++++	display: flex;
 +++++++	align-items: center;
 +++++++	gap: 8px;
@@ -10481,12 +13775,15 @@ index 0000000..da46719
 +++++++}
 +++++++.cnav-frame {
 +++++++	position: relative;
++++++++	flex: 1;
++++++++	min-height: 0;
 +++++++	width: 100%;
 +++++++}
 +++++++.cnav-frame iframe {
 +++++++	width: 100%;
-+++++++	height: calc(100vh - 150px);
-+++++++	min-height: 480px;
++++++++	height: calc(100vh - 184px); /* 老浏览器兜底 */
++++++++	height: calc(100dvh - 184px);
++++++++	min-height: 0;
 +++++++	border: 1px solid var(--border);
 +++++++	border-radius: var(--radius);
 +++++++	background: #fff;
@@ -10512,10 +13809,10 @@ index 0000000..da46719
 +++++++}
 ++++++diff --git a/src/custom-nav/ui/store.ts b/src/custom-nav/ui/store.ts
 ++++++new file mode 100644
-++++++index 0000000..bb9a19a
+++++++index 0000000..58ce3be
 ++++++--- /dev/null
 +++++++++ b/src/custom-nav/ui/store.ts
-++++++@@ -0,0 +1,27 @@
+++++++@@ -0,0 +1,40 @@
 +++++++/**
 +++++++ * 自定义导航 —— 模块级缓存
 +++++++ *
@@ -10526,6 +13823,18 @@ index 0000000..da46719
 +++++++import { navApi } from "./api";
 +++++++
 +++++++let cached: Promise<CustomNavItem[]> | null = null;
++++++++
++++++++/** 保存后通知订阅方（顶栏链接组件需要刷新） */
++++++++const listeners = new Set<() => void>();
++++++++export function subscribeNav(listener: () => void): () => void {
++++++++	listeners.add(listener);
++++++++	return () => {
++++++++		listeners.delete(listener);
++++++++	};
++++++++}
++++++++function notify() {
++++++++	for (const listener of listeners) listener();
++++++++}
 +++++++
 +++++++export function getNavItems(force = false): Promise<CustomNavItem[]> {
 +++++++	if (!cached || force) {
@@ -10541,6 +13850,7 @@ index 0000000..da46719
 +++++++export async function saveNavItems(items: CustomNavItem[]): Promise<CustomNavItem[]> {
 +++++++	const saved = await navApi.put(items).then((res) => res.items);
 +++++++	cached = Promise.resolve(saved);
++++++++	notify();
 +++++++	return saved;
 +++++++}
 ++++++diff --git a/src/custom-nav/ui/text.ts b/src/custom-nav/ui/text.ts
@@ -12100,7 +15410,7 @@ index 0000000..da46719
 +++++++	disable: (holdingId: string) => request<TradesView>(`/api/holdings/${holdingId}/trades/disable`, json({})),
 +++++++};
 ++++++diff --git a/src/web/App.tsx b/src/web/App.tsx
-++++++index 7853770..8c110ee 100644
+++++++index 7853770..5979738 100644
 ++++++--- a/src/web/App.tsx
 +++++++++ b/src/web/App.tsx
 ++++++@@ -1,4 +1,4 @@
@@ -12116,7 +15426,7 @@ index 0000000..da46719
 +++++++// 独立功能：持仓交易流水（/trades/:holdingId），来自 src/trades/
 +++++++const TradesPage = lazy(() => import("../trades/ui/TradesPage").then((module) => ({ default: module.TradesPage })));
 +++++++// 独立功能：自定义导航菜单（顶栏渲染 + /custom/:id 嵌入页），来自 src/custom-nav/
-+++++++import { CustomNav } from "../custom-nav/ui/CustomNav";
++++++++import { CustomNavGear, CustomNavLinks } from "../custom-nav/ui/CustomNav";
 +++++++const CustomNavPage = lazy(() => import("../custom-nav/ui/CustomNavPage").then((module) => ({ default: module.CustomNavPage })));
 ++++++ 
 ++++++ function PageLoading() {
@@ -12130,7 +15440,7 @@ index 0000000..da46719
 ++++++ 		if (path.startsWith("/accounts")) return <AccountsPage />;
 ++++++ 		if (path.startsWith("/holdings")) return <HoldingsPage />;
 ++++++ 		if (path.startsWith("/history")) return <HistoryPage />;
-++++++@@ -49,10 +56,14 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
+++++++@@ -49,10 +56,15 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
 ++++++ 			<div className="topbar">
 ++++++ 				<span className="brand">{t("app.name")}</span>
 ++++++ 				<nav className="nav">
@@ -12143,8 +15453,9 @@ index 0000000..da46719
 +++++++							<Link to={item.to} className={path === item.to ? "active" : ""}>
 +++++++								{t(item.key)}
 +++++++							</Link>
-+++++++							{/* 独立功能：自定义导航菜单紧跟"总览"之后显示 */}
-+++++++							{index === 0 && <CustomNav />}
++++++++							{/* 独立功能：自定义导航菜单链接紧跟"总览"之后、管理齿轮放在"设置"之后 */}
++++++++							{index === 0 && <CustomNavLinks />}
++++++++							{index === NAV.length - 1 && <CustomNavGear />}
 +++++++						</Fragment>
 ++++++ 					))}
 ++++++ 				</nav>
@@ -13274,11 +16585,11 @@ index 0000000..da46719
 ++++++}
 +++++diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
 +++++new file mode 100644
-+++++index 0000000..afc0f69
++++++index 0000000..1b1e4d2
 +++++--- /dev/null
 ++++++++ b/src/custom-nav/ui/CustomNavPage.tsx
-+++++@@ -0,0 +1,84 @@
-++++++import { useEffect, useRef, useState } from "react";
++++++@@ -0,0 +1,76 @@
+++++++import { useEffect, useState } from "react";
 ++++++import { useRouter } from "../../web/lib/router";
 ++++++import { useAsync } from "../../web/lib/useAsync";
 ++++++import { useT } from "../../web/lib/i18n";
@@ -13291,8 +16602,8 @@ index 0000000..da46719
 ++++++ *
 ++++++ * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
 ++++++ * 顶部导航栏保持原样，看起来就是当前应用的一部分。
-++++++ * 目标网站若拒绝被嵌入（X-Frame-Options / CSP），iframe 不会触发任何事件，
-++++++ * 用超时兜底检测：超过 5 秒仍未加载则提示，并提供新标签打开。
+++++++ * iframe 的 load 事件要等所有子资源完成才触发，若子资源被卡（CDN 等）可能很慢，
+++++++ * 用较长的非阻塞提示条兜底：超时只显示一行提示（不遮挡页面），加载成功即消失。
 ++++++ */
 ++++++export function CustomNavPage() {
 ++++++	const { path } = useRouter();
@@ -13301,17 +16612,12 @@ index 0000000..da46719
 ++++++	const { data } = useAsync(() => getNavItems(), []);
 ++++++	const item = data?.find((entry) => entry.id === id);
 ++++++
-++++++	const [stuck, setStuck] = useState(false);
-++++++	const loadedRef = useRef(false);
+++++++	const [slow, setSlow] = useState(false);
 ++++++
 ++++++	useEffect(() => {
 ++++++		if (!item || item.mode !== "embed") return;
-++++++		loadedRef.current = false;
-++++++		setStuck(false);
-++++++		const timer = window.setTimeout(() => {
-++++++			// X-Frame-Options 拦截时 iframe 不发 load/error 事件，只能靠超时兜底
-++++++			if (!loadedRef.current) setStuck(true);
-++++++		}, 5000);
+++++++		setSlow(false);
+++++++		const timer = window.setTimeout(() => setSlow(true), 8000);
 ++++++		return () => window.clearTimeout(timer);
 ++++++	}, [item?.id, item?.url]);
 ++++++
@@ -13329,20 +16635,17 @@ index 0000000..da46719
 ++++++						title={item.name}
 ++++++						src={item.url}
 ++++++						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
-++++++						onLoad={() => {
-++++++							loadedRef.current = true;
-++++++							setStuck(false);
-++++++						}}
+++++++						onLoad={() => setSlow(false)}
 ++++++					/>
-++++++					{stuck && (
-++++++						<div className="cnav-stuck">
-++++++							<p>{t.embedBlocked}</p>
-++++++							<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
-++++++								{t.openTab}
-++++++							</a>
-++++++						</div>
-++++++					)}
 ++++++				</div>
+++++++				{slow && (
+++++++					<p className="cnav-slow">
+++++++						{t.embedSlow}{" "}
+++++++						<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
+++++++							{t.openTab}
+++++++						</a>
+++++++					</p>
+++++++				)}
 ++++++			</div>
 ++++++		);
 ++++++	}
@@ -13598,10 +16901,10 @@ index 0000000..da46719
 ++++++};
 +++++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 +++++new file mode 100644
-+++++index 0000000..9c5b3d4
++++++index 0000000..775b4ed
 +++++--- /dev/null
 ++++++++ b/src/custom-nav/ui/custom-nav.css
-+++++@@ -0,0 +1,199 @@
++++++@@ -0,0 +1,191 @@
 ++++++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 ++++++.cnav-gear {
 ++++++	display: inline-flex;
@@ -13783,23 +17086,15 @@ index 0000000..da46719
 ++++++	background: #fff;
 ++++++	display: block;
 ++++++}
-++++++.cnav-stuck {
-++++++	position: absolute;
-++++++	inset: 0;
-++++++	display: flex;
-++++++	flex-direction: column;
-++++++	align-items: center;
-++++++	justify-content: center;
-++++++	gap: 12px;
-++++++	padding: 24px;
-++++++	text-align: center;
-++++++	background: var(--surface);
-++++++	color: var(--muted);
-++++++	border-radius: var(--radius);
-++++++}
-++++++.cnav-stuck p {
+++++++/* 非遮挡提示条：不覆盖 iframe，仅作加载过慢/嵌入被拒的兜底提示 */
+++++++.cnav-slow {
 ++++++	margin: 0;
-++++++	max-width: 460px;
+++++++	font-size: 13px;
+++++++	color: var(--muted);
+++++++	display: flex;
+++++++	align-items: center;
+++++++	gap: 8px;
+++++++	flex-wrap: wrap;
 ++++++}
 +++++diff --git a/src/custom-nav/ui/store.ts b/src/custom-nav/ui/store.ts
 +++++new file mode 100644
@@ -13849,7 +17144,7 @@ index 0000000..da46719
 ++++++}
 +++++diff --git a/src/custom-nav/ui/text.ts b/src/custom-nav/ui/text.ts
 +++++new file mode 100644
-+++++index 0000000..5b6a80c
++++++index 0000000..a12d73d
 +++++--- /dev/null
 ++++++++ b/src/custom-nav/ui/text.ts
 +++++@@ -0,0 +1,90 @@
@@ -13881,7 +17176,7 @@ index 0000000..da46719
 ++++++	empty: string;
 ++++++	notFound: string;
 ++++++	openTab: string;
-++++++	embedBlocked: string;
+++++++	embedSlow: string;
 ++++++	nameRequired: string;
 ++++++	invalidUrl: string;
 ++++++	itemsCount: (n: number) => string;
@@ -13908,7 +17203,7 @@ index 0000000..da46719
 ++++++		empty: "还没有自定义菜单",
 ++++++		notFound: "找不到该自定义菜单",
 ++++++		openTab: "在新标签打开",
-++++++		embedBlocked: "该网站拒绝了嵌入显示（服务端设置了 X-Frame-Options / frame-ancestors），请在新标签打开，或在服务端放开嵌入限制。",
+++++++		embedSlow: "页面仍在加载中…若长时间不显示，可能被目标网站拒绝嵌入，请在新标签打开。",
 ++++++		nameRequired: "请输入菜单名称",
 ++++++		invalidUrl: "请输入有效的 http(s) 地址",
 ++++++		itemsCount: (n: number) => (n ? `共 ${n} 项` : ""),
@@ -13933,7 +17228,7 @@ index 0000000..da46719
 ++++++		empty: "No custom menus yet",
 ++++++		notFound: "Custom menu not found",
 ++++++		openTab: "Open in new tab",
-++++++		embedBlocked: "This site refused to be embedded (server sends X-Frame-Options / frame-ancestors). Open in a new tab, or relax the embedding restriction on the server.",
+++++++		embedSlow: "Still loading… If it never appears, the site may refuse to be embedded. Open it in a new tab.",
 ++++++		nameRequired: "Please enter a menu name",
 ++++++		invalidUrl: "Please enter a valid http(s) URL",
 ++++++		itemsCount: (n: number) => (n ? `${n} item(s)` : ""),
@@ -16579,11 +19874,11 @@ index 0000000..da46719
 +++++}
 ++++diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
 ++++new file mode 100644
-++++index 0000000..1b1e4d2
+++++index 0000000..5198e60
 ++++--- /dev/null
 +++++++ b/src/custom-nav/ui/CustomNavPage.tsx
-++++@@ -0,0 +1,76 @@
-+++++import { useEffect, useState } from "react";
+++++@@ -0,0 +1,99 @@
++++++import { useEffect, useLayoutEffect, useRef, useState } from "react";
 +++++import { useRouter } from "../../web/lib/router";
 +++++import { useAsync } from "../../web/lib/useAsync";
 +++++import { useT } from "../../web/lib/i18n";
@@ -16596,8 +19891,12 @@ index 0000000..da46719
 +++++ *
 +++++ * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
 +++++ * 顶部导航栏保持原样，看起来就是当前应用的一部分。
-+++++ * iframe 的 load 事件要等所有子资源完成才触发，若子资源被卡（CDN 等）可能很慢，
-+++++ * 用较长的非阻塞提示条兜底：超时只显示一行提示（不遮挡页面），加载成功即消失。
++++++ *
++++++ * - iframe 高度运行时精确测量：用剩余视口高度（不含顶栏/工具栏/底部留白），
++++++ *   页面本身不产生滚动条；
++++++ * - iframe 去边框并隐藏自身滚动条（内容仍可滚），呈现"无感"效果；
++++++ * - 加载超过 8 秒未完成时，在 iframe 区域内顶部浮现小气泡提示（不遮挡页面），
++++++ *   load 事件触发后自动消失。
 +++++ */
 +++++export function CustomNavPage() {
 +++++	const { path } = useRouter();
@@ -16607,6 +19906,9 @@ index 0000000..da46719
 +++++	const item = data?.find((entry) => entry.id === id);
 +++++
 +++++	const [slow, setSlow] = useState(false);
++++++	const [frameH, setFrameH] = useState<number | undefined>(undefined);
++++++	const pageRef = useRef<HTMLDivElement>(null);
++++++	const toolbarRef = useRef<HTMLDivElement>(null);
 +++++
 +++++	useEffect(() => {
 +++++		if (!item || item.mode !== "embed") return;
@@ -16615,31 +19917,47 @@ index 0000000..da46719
 +++++		return () => window.clearTimeout(timer);
 +++++	}, [item?.id, item?.url]);
 +++++
++++++	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条
++++++	useLayoutEffect(() => {
++++++		if (!item || item.mode !== "embed") return;
++++++		const measure = () => {
++++++			if (!pageRef.current) return;
++++++			const top = pageRef.current.getBoundingClientRect().top;
++++++			const toolbarH = toolbarRef.current?.offsetHeight ?? 0;
++++++			// 8 = .cnav-page 的 gap，64 = .app-shell 的 padding-bottom
++++++			const available = window.innerHeight - top - toolbarH - 72;
++++++			setFrameH(Math.max(available, 240));
++++++		};
++++++		measure();
++++++		window.addEventListener("resize", measure);
++++++		return () => window.removeEventListener("resize", measure);
++++++	}, [item?.id, item?.url]);
++++++
 +++++	if (item && item.mode === "embed") {
 +++++		return (
-+++++			<div className="cnav-page">
-+++++				<div className="cnav-toolbar">
++++++			<div ref={pageRef} className="cnav-page">
++++++				<div ref={toolbarRef} className="cnav-toolbar">
 +++++					<span className="cnav-title">{item.name}</span>
 +++++					<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
 +++++						{t.openTab}
 +++++					</a>
 +++++				</div>
-+++++				<div className="cnav-frame">
++++++				<div className="cnav-frame" style={{ height: frameH }}>
 +++++					<iframe
 +++++						title={item.name}
 +++++						src={item.url}
 +++++						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
 +++++						onLoad={() => setSlow(false)}
 +++++					/>
++++++					{slow && (
++++++						<div className="cnav-slow">
++++++							<p>{t.embedSlow}</p>
++++++							<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
++++++								{t.openTab}
++++++							</a>
++++++						</div>
++++++					)}
 +++++				</div>
-+++++				{slow && (
-+++++					<p className="cnav-slow">
-+++++						{t.embedSlow}{" "}
-+++++						<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
-+++++							{t.openTab}
-+++++						</a>
-+++++					</p>
-+++++				)}
 +++++			</div>
 +++++		);
 +++++	}
@@ -16895,10 +20213,10 @@ index 0000000..da46719
 +++++};
 ++++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 ++++new file mode 100644
-++++index 0000000..775b4ed
+++++index 0000000..1b1cd93
 ++++--- /dev/null
 +++++++ b/src/custom-nav/ui/custom-nav.css
-++++@@ -0,0 +1,191 @@
+++++@@ -0,0 +1,210 @@
 +++++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 +++++.cnav-gear {
 +++++	display: inline-flex;
@@ -17069,26 +20387,45 @@ index 0000000..da46719
 +++++	flex: 1;
 +++++	min-height: 0;
 +++++	width: 100%;
++++++	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖 */
++++++	height: calc(100dvh - 184px);
 +++++}
 +++++.cnav-frame iframe {
 +++++	width: 100%;
-+++++	height: calc(100vh - 184px); /* 老浏览器兜底 */
-+++++	height: calc(100dvh - 184px);
++++++	height: 100%;
 +++++	min-height: 0;
-+++++	border: 1px solid var(--border);
-+++++	border-radius: var(--radius);
++++++	border: none;
 +++++	background: #fff;
 +++++	display: block;
++++++	/* 隐藏 iframe 自身滚动条（内容仍可滚动），追求无感嵌入 */
++++++	scrollbar-width: none;
++++++	-ms-overflow-style: none;
 +++++}
-+++++/* 非遮挡提示条：不覆盖 iframe，仅作加载过慢/嵌入被拒的兜底提示 */
++++++.cnav-frame iframe::-webkit-scrollbar {
++++++	width: 0;
++++++	height: 0;
++++++	display: none;
++++++}
++++++/* 加载提示：iframe 区域内顶部居中小气泡，不遮挡页面，load 成功后自动消失 */
 +++++.cnav-slow {
-+++++	margin: 0;
-+++++	font-size: 13px;
-+++++	color: var(--muted);
++++++	position: absolute;
++++++	top: 10px;
++++++	left: 50%;
++++++	transform: translateX(-50%);
 +++++	display: flex;
 +++++	align-items: center;
 +++++	gap: 8px;
-+++++	flex-wrap: wrap;
++++++	padding: 8px 12px;
++++++	font-size: 13px;
++++++	color: var(--muted);
++++++	background: var(--surface);
++++++	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
++++++	border-radius: 8px;
++++++	max-width: calc(100% - 32px);
++++++	z-index: 2;
++++++}
++++++.cnav-slow p {
++++++	margin: 0;
 +++++}
 ++++diff --git a/src/custom-nav/ui/store.ts b/src/custom-nav/ui/store.ts
 ++++new file mode 100644
@@ -19868,10 +23205,10 @@ index 0000000..da46719
 ++++}
 +++diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
 +++new file mode 100644
-+++index 0000000..5198e60
++++index 0000000..119f847
 +++--- /dev/null
 ++++++ b/src/custom-nav/ui/CustomNavPage.tsx
-+++@@ -0,0 +1,99 @@
++++@@ -0,0 +1,114 @@
 ++++import { useEffect, useLayoutEffect, useRef, useState } from "react";
 ++++import { useRouter } from "../../web/lib/router";
 ++++import { useAsync } from "../../web/lib/useAsync";
@@ -19911,20 +23248,35 @@ index 0000000..da46719
 ++++		return () => window.clearTimeout(timer);
 ++++	}, [item?.id, item?.url]);
 ++++
-++++	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条
+++++	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条。
+++++	// 用文档坐标（rect.top + scrollY），不受路由切换后残留滚动位置影响。
 ++++	useLayoutEffect(() => {
 ++++		if (!item || item.mode !== "embed") return;
 ++++		const measure = () => {
 ++++			if (!pageRef.current) return;
-++++			const top = pageRef.current.getBoundingClientRect().top;
+++++			const docTop = pageRef.current.getBoundingClientRect().top + window.scrollY;
 ++++			const toolbarH = toolbarRef.current?.offsetHeight ?? 0;
 ++++			// 8 = .cnav-page 的 gap，64 = .app-shell 的 padding-bottom
-++++			const available = window.innerHeight - top - toolbarH - 72;
-++++			setFrameH(Math.max(available, 240));
+++++			const available = window.innerHeight - docTop - toolbarH - 72;
+++++			const next = Math.max(available, 240);
+++++			setFrameH((prev) => (prev === next ? prev : next));
 ++++		};
+++++		// 切到嵌入页时复位滚动，避免上个页面的滚动位置干扰测量与观感
+++++		window.scrollTo(0, 0);
 ++++		measure();
+++++		// 首帧之后、布局稳定后再补测（字体加载/顶栏换行都可能改变高度）
+++++		const t1 = window.setTimeout(measure, 50);
+++++		const t2 = window.setTimeout(measure, 500);
+++++		document.fonts?.ready?.then(measure).catch(() => undefined);
+++++		const ro = new ResizeObserver(measure);
+++++		if (pageRef.current) ro.observe(pageRef.current);
 ++++		window.addEventListener("resize", measure);
-++++		return () => window.removeEventListener("resize", measure);
+++++		return () => {
+++++			window.clearTimeout(t1);
+++++			window.clearTimeout(t2);
+++++			ro.disconnect();
+++++			window.removeEventListener("resize", measure);
+++++		};
 ++++	}, [item?.id, item?.url]);
 ++++
 ++++	if (item && item.mode === "embed") {
@@ -20207,10 +23559,10 @@ index 0000000..da46719
 ++++};
 +++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 +++new file mode 100644
-+++index 0000000..1b1cd93
++++index 0000000..41d1cd4
 +++--- /dev/null
 ++++++ b/src/custom-nav/ui/custom-nav.css
-+++@@ -0,0 +1,210 @@
++++@@ -0,0 +1,211 @@
 ++++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 ++++.cnav-gear {
 ++++	display: inline-flex;
@@ -20381,8 +23733,9 @@ index 0000000..da46719
 ++++	flex: 1;
 ++++	min-height: 0;
 ++++	width: 100%;
-++++	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖 */
-++++	height: calc(100dvh - 184px);
+++++	overflow: hidden;
+++++	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖（不用 dvh，避免旧浏览器无效值塌缩） */
+++++	height: 60vh;
 ++++}
 ++++.cnav-frame iframe {
 ++++	width: 100%;
@@ -23199,11 +26552,11 @@ index 0000000..da46719
 +++}
 ++diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
 ++new file mode 100644
-++index 0000000..119f847
+++index 0000000..72aa704
 ++--- /dev/null
 +++++ b/src/custom-nav/ui/CustomNavPage.tsx
-++@@ -0,0 +1,114 @@
-+++import { useEffect, useLayoutEffect, useRef, useState } from "react";
+++@@ -0,0 +1,80 @@
++++import { useEffect, useState } from "react";
 +++import { useRouter } from "../../web/lib/router";
 +++import { useAsync } from "../../web/lib/useAsync";
 +++import { useT } from "../../web/lib/i18n";
@@ -23217,8 +26570,8 @@ index 0000000..da46719
 +++ * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
 +++ * 顶部导航栏保持原样，看起来就是当前应用的一部分。
 +++ *
-+++ * - iframe 高度运行时精确测量：用剩余视口高度（不含顶栏/工具栏/底部留白），
-+++ *   页面本身不产生滚动条；
++++ * - iframe 高度由纯 CSS flex 高度链撑满剩余视口（见 custom-nav.css 的
++++ *   `.app-shell:has(.cnav-page)`），页面本身不产生滚动条；
 +++ * - iframe 去边框并隐藏自身滚动条（内容仍可滚），呈现"无感"效果；
 +++ * - 加载超过 8 秒未完成时，在 iframe 区域内顶部浮现小气泡提示（不遮挡页面），
 +++ *   load 事件触发后自动消失。
@@ -23231,9 +26584,6 @@ index 0000000..da46719
 +++	const item = data?.find((entry) => entry.id === id);
 +++
 +++	const [slow, setSlow] = useState(false);
-+++	const [frameH, setFrameH] = useState<number | undefined>(undefined);
-+++	const pageRef = useRef<HTMLDivElement>(null);
-+++	const toolbarRef = useRef<HTMLDivElement>(null);
 +++
 +++	useEffect(() => {
 +++		if (!item || item.mode !== "embed") return;
@@ -23242,47 +26592,16 @@ index 0000000..da46719
 +++		return () => window.clearTimeout(timer);
 +++	}, [item?.id, item?.url]);
 +++
-+++	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条。
-+++	// 用文档坐标（rect.top + scrollY），不受路由切换后残留滚动位置影响。
-+++	useLayoutEffect(() => {
-+++		if (!item || item.mode !== "embed") return;
-+++		const measure = () => {
-+++			if (!pageRef.current) return;
-+++			const docTop = pageRef.current.getBoundingClientRect().top + window.scrollY;
-+++			const toolbarH = toolbarRef.current?.offsetHeight ?? 0;
-+++			// 8 = .cnav-page 的 gap，64 = .app-shell 的 padding-bottom
-+++			const available = window.innerHeight - docTop - toolbarH - 72;
-+++			const next = Math.max(available, 240);
-+++			setFrameH((prev) => (prev === next ? prev : next));
-+++		};
-+++		// 切到嵌入页时复位滚动，避免上个页面的滚动位置干扰测量与观感
-+++		window.scrollTo(0, 0);
-+++		measure();
-+++		// 首帧之后、布局稳定后再补测（字体加载/顶栏换行都可能改变高度）
-+++		const t1 = window.setTimeout(measure, 50);
-+++		const t2 = window.setTimeout(measure, 500);
-+++		document.fonts?.ready?.then(measure).catch(() => undefined);
-+++		const ro = new ResizeObserver(measure);
-+++		if (pageRef.current) ro.observe(pageRef.current);
-+++		window.addEventListener("resize", measure);
-+++		return () => {
-+++			window.clearTimeout(t1);
-+++			window.clearTimeout(t2);
-+++			ro.disconnect();
-+++			window.removeEventListener("resize", measure);
-+++		};
-+++	}, [item?.id, item?.url]);
-+++
 +++	if (item && item.mode === "embed") {
 +++		return (
-+++			<div ref={pageRef} className="cnav-page">
-+++				<div ref={toolbarRef} className="cnav-toolbar">
++++			<div className="cnav-page">
++++				<div className="cnav-toolbar">
 +++					<span className="cnav-title">{item.name}</span>
 +++					<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
 +++						{t.openTab}
 +++					</a>
 +++				</div>
-+++				<div className="cnav-frame" style={{ height: frameH }}>
++++				<div className="cnav-frame">
 +++					<iframe
 +++						title={item.name}
 +++						src={item.url}
@@ -23553,10 +26872,10 @@ index 0000000..da46719
 +++};
 ++diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 ++new file mode 100644
-++index 0000000..41d1cd4
+++index 0000000..97592bc
 ++--- /dev/null
 +++++ b/src/custom-nav/ui/custom-nav.css
-++@@ -0,0 +1,211 @@
+++@@ -0,0 +1,222 @@
 +++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 +++.cnav-gear {
 +++	display: inline-flex;
@@ -23707,6 +27026,8 @@ index 0000000..da46719
 +++	display: flex;
 +++	flex-direction: column;
 +++	gap: 8px;
++++	flex: 1;
++++	min-height: 0;
 +++}
 +++.cnav-toolbar {
 +++	flex: 0 0 auto;
@@ -23722,14 +27043,23 @@ index 0000000..da46719
 +++	text-overflow: ellipsis;
 +++	white-space: nowrap;
 +++}
++++/* 仅当页面内含嵌入区时，把 .app-shell 变成纵向 flex，让 iframe 填满剩余视口、页面不产生滚动条。
++++   :has() 使该规则只作用于嵌入页，不影响其它页面的 .app-shell 布局 */
++++.app-shell:has(.cnav-page) {
++++	min-height: 100vh;
++++	min-height: 100dvh;
++++	display: flex;
++++	flex-direction: column;
++++}
++++.app-shell:has(.cnav-page) .topbar {
++++	flex-shrink: 0;
++++}
 +++.cnav-frame {
 +++	position: relative;
 +++	flex: 1;
 +++	min-height: 0;
 +++	width: 100%;
 +++	overflow: hidden;
-+++	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖（不用 dvh，避免旧浏览器无效值塌缩） */
-+++	height: 60vh;
 +++}
 +++.cnav-frame iframe {
 +++	width: 100%;
@@ -26546,11 +29876,11 @@ index 0000000..da46719
 ++}
 +diff --git a/src/custom-nav/ui/CustomNavPage.tsx b/src/custom-nav/ui/CustomNavPage.tsx
 +new file mode 100644
-+index 0000000..72aa704
++index 0000000..6464edd
 +--- /dev/null
 ++++ b/src/custom-nav/ui/CustomNavPage.tsx
-+@@ -0,0 +1,80 @@
-++import { useEffect, useState } from "react";
++@@ -0,0 +1,90 @@
+++import { useEffect, useLayoutEffect, useState } from "react";
 ++import { useRouter } from "../../web/lib/router";
 ++import { useAsync } from "../../web/lib/useAsync";
 ++import { useT } from "../../web/lib/i18n";
@@ -26578,6 +29908,16 @@ index 0000000..da46719
 ++	const item = data?.find((entry) => entry.id === id);
 ++
 ++	const [slow, setSlow] = useState(false);
+++
+++	// 给共享的 .app-shell 加上 has-cnav 标记，配合 custom-nav.css 的类选择器建立 flex 高度链。
+++	// 用类选择器而非 :has()，兼容不支持 :has() 的旧浏览器（useLayoutEffect 在首帧绘制前生效）。
+++	useLayoutEffect(() => {
+++		if (!item || item.mode !== "embed") return;
+++		const shell = document.querySelector(".app-shell");
+++		if (!shell) return;
+++		shell.classList.add("has-cnav");
+++		return () => shell.classList.remove("has-cnav");
+++	}, [item?.id, item?.url]);
 ++
 ++	useEffect(() => {
 ++		if (!item || item.mode !== "embed") return;
@@ -26866,10 +30206,10 @@ index 0000000..da46719
 ++};
 +diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 +new file mode 100644
-+index 0000000..97592bc
++index 0000000..2af80c0
 +--- /dev/null
 ++++ b/src/custom-nav/ui/custom-nav.css
-+@@ -0,0 +1,222 @@
++@@ -0,0 +1,225 @@
 ++/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 ++.cnav-gear {
 ++	display: inline-flex;
@@ -27038,13 +30378,16 @@ index 0000000..da46719
 ++	white-space: nowrap;
 ++}
 ++/* 仅当页面内含嵌入区时，把 .app-shell 变成纵向 flex，让 iframe 填满剩余视口、页面不产生滚动条。
-++   :has() 使该规则只作用于嵌入页，不影响其它页面的 .app-shell 布局 */
+++   .has-cnav 由 CustomNavPage 的 useLayoutEffect 挂到 .app-shell 上（不依赖 :has()，兼容旧浏览器）；
+++   :has() 规则作为 JS 未运行时的第一帧兜底，二者只作用于嵌入页，不影响其它页面布局 */
+++.app-shell.has-cnav,
 ++.app-shell:has(.cnav-page) {
 ++	min-height: 100vh;
 ++	min-height: 100dvh;
 ++	display: flex;
 ++	flex-direction: column;
 ++}
+++.app-shell.has-cnav .topbar,
 ++.app-shell:has(.cnav-page) .topbar {
 ++	flex-shrink: 0;
 ++}
@@ -30200,10 +33543,10 @@ index 0000000..ebe74c3
 +};
 diff --git a/src/custom-nav/ui/custom-nav.css b/src/custom-nav/ui/custom-nav.css
 new file mode 100644
-index 0000000..2af80c0
+index 0000000..98fd3da
 --- /dev/null
 +++ b/src/custom-nav/ui/custom-nav.css
-@@ -0,0 +1,225 @@
+@@ -0,0 +1,234 @@
 +/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
 +.cnav-gear {
 +	display: inline-flex;
@@ -30372,16 +33715,25 @@ index 0000000..2af80c0
 +	white-space: nowrap;
 +}
 +/* 仅当页面内含嵌入区时，把 .app-shell 变成纵向 flex，让 iframe 填满剩余视口、页面不产生滚动条。
++   注意：:has() 与 .has-cnav 必须分开成两条独立规则——
++   若写在同一选择器列表里，不支持 :has() 的浏览器会因该选择器无效而丢弃整条规则。
 +   .has-cnav 由 CustomNavPage 的 useLayoutEffect 挂到 .app-shell 上（不依赖 :has()，兼容旧浏览器）；
 +   :has() 规则作为 JS 未运行时的第一帧兜底，二者只作用于嵌入页，不影响其它页面布局 */
-+.app-shell.has-cnav,
++.app-shell.has-cnav {
++	min-height: 100vh;
++	min-height: 100dvh;
++	display: flex;
++	flex-direction: column;
++}
 +.app-shell:has(.cnav-page) {
 +	min-height: 100vh;
 +	min-height: 100dvh;
 +	display: flex;
 +	flex-direction: column;
 +}
-+.app-shell.has-cnav .topbar,
++.app-shell.has-cnav .topbar {
++	flex-shrink: 0;
++}
 +.app-shell:has(.cnav-page) .topbar {
 +	flex-shrink: 0;
 +}
