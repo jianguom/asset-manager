@@ -1,0 +1,176 @@
+/* ── 自定义导航菜单（src/custom-nav/）── 前缀 cnav-，避免与上游样式冲突 */
+.cnav-gear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+}
+.cnav-gear:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+.cnav-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgb(0 0 0 / 0.45);
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: 48px 16px;
+	z-index: 50;
+	overflow: auto;
+}
+
+.cnav-panel {
+	width: 100%;
+	max-width: 560px;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.cnav-panel h2 {
+	margin: 0;
+	font-size: 16px;
+}
+
+.cnav-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--border);
+}
+.cnav-row:last-child {
+	border-bottom: none;
+}
+.cnav-row-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 14px;
+}
+.cnav-row-url {
+	flex: 2;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--muted);
+	font-size: 12px;
+}
+.cnav-badge {
+	flex-shrink: 0;
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--surface-2);
+	color: var(--muted);
+}
+.cnav-row-actions {
+	display: flex;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.cnav-form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--border);
+}
+.cnav-form-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+.cnav-form-row label {
+	flex: 0 0 auto;
+	width: 70px;
+	font-size: 13px;
+	color: var(--muted);
+}
+.cnav-form-row input[type="text"],
+.cnav-form-row input[type="url"],
+.cnav-form-row select {
+	flex: 1;
+	min-width: 0;
+}
+.cnav-form-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+}
+
+.cnav-empty {
+	color: var(--muted);
+	font-size: 13px;
+	padding: 12px 0;
+	text-align: center;
+}
+
+.cnav-error {
+	color: var(--danger, #dc2626);
+	font-size: 13px;
+	margin: 0;
+}
+.cnav-panel button.danger {
+	color: var(--danger, #dc2626);
+}
+
+.cnav-panel-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	border-top: 1px solid var(--border);
+	padding-top: 12px;
+}
+.cnav-count {
+	color: var(--muted);
+	font-size: 12px;
+}
+
+/* ── 嵌入页（/custom/:id）── */
+.cnav-page {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.cnav-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.cnav-title {
+	font-weight: 600;
+	font-size: 14px;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.cnav-frame {
+	width: 100%;
+}
+.cnav-frame iframe {
+	width: 100%;
+	height: calc(100vh - 150px);
+	min-height: 480px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: #fff;
+	display: block;
+}

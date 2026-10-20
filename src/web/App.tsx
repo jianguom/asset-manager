@@ -20,6 +20,9 @@ const HistoryPage = lazy(() => import("./pages/History").then((module) => ({ def
 const SettingsPage = lazy(() => import("./pages/Settings").then((module) => ({ default: module.SettingsPage })));
 // 独立功能：持仓交易流水（/trades/:holdingId），来自 src/trades/
 const TradesPage = lazy(() => import("../trades/ui/TradesPage").then((module) => ({ default: module.TradesPage })));
+// 独立功能：自定义导航菜单（顶栏渲染 + /custom/:id 嵌入页），来自 src/custom-nav/
+import { CustomNav } from "../custom-nav/ui/CustomNav";
+const CustomNavPage = lazy(() => import("../custom-nav/ui/CustomNavPage").then((module) => ({ default: module.CustomNavPage })));
 
 function PageLoading() {
 	const t = useT();
@@ -40,6 +43,7 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
 
 	const page = (() => {
 		if (path.startsWith("/trades")) return <TradesPage />;
+		if (path.startsWith("/custom")) return <CustomNavPage />; // 独立功能：自定义导航嵌入页（src/custom-nav/）
 		if (path.startsWith("/accounts")) return <AccountsPage />;
 		if (path.startsWith("/holdings")) return <HoldingsPage />;
 		if (path.startsWith("/history")) return <HistoryPage />;
@@ -57,6 +61,7 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
 							{t(item.key)}
 						</Link>
 					))}
+					<CustomNav />
 				</nav>
 				<div className="spacer" />
 				<button
