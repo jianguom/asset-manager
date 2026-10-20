@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "../../web/lib/router";
 import { useAsync } from "../../web/lib/useAsync";
 import { useT } from "../../web/lib/i18n";
@@ -12,8 +12,8 @@ import "./custom-nav.css";
  * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
  * 顶部导航栏保持原样，看起来就是当前应用的一部分。
  *
- * - iframe 高度运行时精确测量：用剩余视口高度（不含顶栏/工具栏/底部留白），
- *   页面本身不产生滚动条；
+ * - iframe 高度由纯 CSS flex 高度链撑满剩余视口（见 custom-nav.css 的
+ *   `.app-shell:has(.cnav-page)`），页面本身不产生滚动条；
  * - iframe 去边框并隐藏自身滚动条（内容仍可滚），呈现"无感"效果；
  * - 加载超过 8 秒未完成时，在 iframe 区域内顶部浮现小气泡提示（不遮挡页面），
  *   load 事件触发后自动消失。
@@ -26,9 +26,6 @@ export function CustomNavPage() {
 	const item = data?.find((entry) => entry.id === id);
 
 	const [slow, setSlow] = useState(false);
-	const [frameH, setFrameH] = useState<number | undefined>(undefined);
-	const pageRef = useRef<HTMLDivElement>(null);
-	const toolbarRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		if (!item || item.mode !== "embed") return;
@@ -37,47 +34,16 @@ export function CustomNavPage() {
 		return () => window.clearTimeout(timer);
 	}, [item?.id, item?.url]);
 
-	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条。
-	// 用文档坐标（rect.top + scrollY），不受路由切换后残留滚动位置影响。
-	useLayoutEffect(() => {
-		if (!item || item.mode !== "embed") return;
-		const measure = () => {
-			if (!pageRef.current) return;
-			const docTop = pageRef.current.getBoundingClientRect().top + window.scrollY;
-			const toolbarH = toolbarRef.current?.offsetHeight ?? 0;
-			// 8 = .cnav-page 的 gap，64 = .app-shell 的 padding-bottom
-			const available = window.innerHeight - docTop - toolbarH - 72;
-			const next = Math.max(available, 240);
-			setFrameH((prev) => (prev === next ? prev : next));
-		};
-		// 切到嵌入页时复位滚动，避免上个页面的滚动位置干扰测量与观感
-		window.scrollTo(0, 0);
-		measure();
-		// 首帧之后、布局稳定后再补测（字体加载/顶栏换行都可能改变高度）
-		const t1 = window.setTimeout(measure, 50);
-		const t2 = window.setTimeout(measure, 500);
-		document.fonts?.ready?.then(measure).catch(() => undefined);
-		const ro = new ResizeObserver(measure);
-		if (pageRef.current) ro.observe(pageRef.current);
-		window.addEventListener("resize", measure);
-		return () => {
-			window.clearTimeout(t1);
-			window.clearTimeout(t2);
-			ro.disconnect();
-			window.removeEventListener("resize", measure);
-		};
-	}, [item?.id, item?.url]);
-
 	if (item && item.mode === "embed") {
 		return (
-			<div ref={pageRef} className="cnav-page">
-				<div ref={toolbarRef} className="cnav-toolbar">
+			<div className="cnav-page">
+				<div className="cnav-toolbar">
 					<span className="cnav-title">{item.name}</span>
 					<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
 						{t.openTab}
 					</a>
 				</div>
-				<div className="cnav-frame" style={{ height: frameH }}>
+				<div className="cnav-frame">
 					<iframe
 						title={item.name}
 						src={item.url}
