@@ -31,7 +31,6 @@ export interface NavText {
 	empty: string;
 	notFound: string;
 	openTab: string;
-	embedSlow: string;
 	nameRequired: string;
 	invalidUrl: string;
 	itemsCount: (n: number) => string;
@@ -63,7 +62,6 @@ const DICT: { zh: NavText; en: NavText } = {
 		empty: "还没有自定义菜单",
 		notFound: "找不到该自定义菜单",
 		openTab: "在新标签打开",
-		embedSlow: "页面仍在加载中…若长时间不显示，可能被目标网站拒绝嵌入，请在新标签打开。",
 		nameRequired: "请输入菜单名称",
 		invalidUrl: "请输入有效的 http(s) 地址",
 		itemsCount: (n: number) => (n ? `共 ${n} 项` : ""),
@@ -93,7 +91,6 @@ const DICT: { zh: NavText; en: NavText } = {
 		empty: "No custom menus yet",
 		notFound: "Custom menu not found",
 		openTab: "Open in new tab",
-		embedSlow: "Still loading… If it never appears, the site may refuse to be embedded. Open it in a new tab.",
 		nameRequired: "Please enter a menu name",
 		invalidUrl: "Please enter a valid http(s) URL",
 		itemsCount: (n: number) => (n ? `${n} item(s)` : ""),

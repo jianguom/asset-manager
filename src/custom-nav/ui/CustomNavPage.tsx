@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useLayoutEffect } from "react";
 import { useRouter } from "../../web/lib/router";
 import { useAsync } from "../../web/lib/useAsync";
 import { useT } from "../../web/lib/i18n";
@@ -18,9 +18,7 @@ import "./custom-nav.css";
  *      比"刚好一屏"略高一点，页面因此多出一小截可滚动空间；
  *   ② 菜单里填了宽/高 → 按配置尺寸锁死 iframe，不再跟随视口推算
  *      （宽、高各自独立生效：只填宽度时高度仍自适应）；
- * - iframe 去边框并隐藏自身滚动条（内容仍可滚），呈现"无感"效果；
- * - 加载超过 20 秒未完成时，在 iframe 区域内顶部浮现小气泡提示（不遮挡页面），
- *   load 事件触发后自动消失。
+ * - iframe 去边框、背景透明并隐藏自身滚动条（内容仍可滚），呈现"无感"效果。
  */
 export function CustomNavPage() {
 	const { path } = useRouter();
@@ -28,8 +26,6 @@ export function CustomNavPage() {
 	const id = path.split("/")[2] ?? "";
 	const { data } = useAsync(() => getNavItems(), []);
 	const item = data?.find((entry) => entry.id === id);
-
-	const [slow, setSlow] = useState(false);
 
 	// 菜单里配置了尺寸时按配置锁死 iframe：填了高度就脱离视口高度链（flex 置为不伸缩，
 	// 否则 flex:1 会把 inline 高度再撑开）；只填宽度时高度仍走自适应。
@@ -54,38 +50,18 @@ export function CustomNavPage() {
 		};
 	}, [item?.id, item?.url, item?.height]);
 
-	useEffect(() => {
-		if (!item || item.mode !== "embed") return;
-		setSlow(false);
-		// 盯盘类数据页加载较慢（行情接口多），20 秒未完成才提示，避免误报遮挡已渲染内容
-		const timer = window.setTimeout(() => setSlow(true), 20000);
-		return () => window.clearTimeout(timer);
-	}, [item?.id, item?.url]);
-
 	if (item && item.mode === "embed") {
 		return (
 			<div className="cnav-page">
 				<div className="cnav-toolbar">
 					<span className="cnav-title">{item.name}</span>
-					<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
-						{t.openTab}
-					</a>
 				</div>
 				<div className="cnav-frame" style={locked}>
 					<iframe
 						title={item.name}
 						src={item.url}
 						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
-						onLoad={() => setSlow(false)}
 					/>
-					{slow && (
-						<div className="cnav-slow">
-							<p>{t.embedSlow}</p>
-							<a className="ghost" href={item.url} target="_blank" rel="noopener noreferrer">
-								{t.openTab}
-							</a>
-						</div>
-					)}
 				</div>
 			</div>
 		);

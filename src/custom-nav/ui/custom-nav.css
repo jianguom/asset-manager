@@ -193,7 +193,6 @@
 	white-space: nowrap;
 }
 .cnav-frame {
-	position: relative;
 	flex: 1;
 	min-height: 0;
 	width: 100%;
@@ -203,7 +202,8 @@
 	width: 100%;
 	height: 100%;
 	border: none;
-	background: #fff;
+	/* 背景透明：只透出本站底色。被嵌站点若自己设了底色，那是它的文档背景，跨域无法覆盖 */
+	background: transparent;
 	/* 隐藏 iframe 自身滚动条（内容仍可滚），追求无感嵌入 */
 	scrollbar-width: none;
 	-ms-overflow-style: none;
@@ -212,25 +212,4 @@
 	width: 0;
 	height: 0;
 	display: none;
-}
-/* 加载提示：iframe 区域内顶部居中小气泡，不遮挡页面，load 成功后自动消失 */
-.cnav-slow {
-	position: absolute;
-	top: 10px;
-	left: 50%;
-	transform: translateX(-50%);
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 8px 12px;
-	font-size: 13px;
-	color: var(--muted);
-	background: var(--surface);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-	border-radius: 8px;
-	max-width: calc(100% - 32px);
-	z-index: 2;
-}
-.cnav-slow p {
-	margin: 0;
 }
