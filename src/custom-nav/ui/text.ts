@@ -23,6 +23,11 @@ export interface NavText {
 	tab: string;
 	namePlaceholder: string;
 	urlPlaceholder: string;
+	width: string;
+	height: string;
+	sizeAuto: string;
+	sizeHint: string;
+	invalidSize: string;
 	empty: string;
 	notFound: string;
 	openTab: string;
@@ -50,6 +55,11 @@ const DICT: { zh: NavText; en: NavText } = {
 		tab: "新标签打开",
 		namePlaceholder: "例如：我的面板",
 		urlPlaceholder: "https://example.com",
+		width: "宽度(px)",
+		height: "高度(px)",
+		sizeAuto: "留空 = 自适应",
+		sizeHint: "仅嵌入方式有效：填了按此尺寸锁死，留空则自适应",
+		invalidSize: "尺寸需为 100–4000 之间的整数，或留空自适应",
 		empty: "还没有自定义菜单",
 		notFound: "找不到该自定义菜单",
 		openTab: "在新标签打开",
@@ -75,6 +85,11 @@ const DICT: { zh: NavText; en: NavText } = {
 		tab: "New tab",
 		namePlaceholder: "e.g. My dashboard",
 		urlPlaceholder: "https://example.com",
+		width: "Width (px)",
+		height: "Height (px)",
+		sizeAuto: "blank = auto",
+		sizeHint: "Embed mode only: set a size to pin the iframe, or leave blank to auto-fit",
+		invalidSize: "Size must be an integer between 100 and 4000, or blank for auto",
 		empty: "No custom menus yet",
 		notFound: "Custom menu not found",
 		openTab: "Open in new tab",

@@ -104,9 +104,16 @@
 }
 .cnav-form-row input[type="text"],
 .cnav-form-row input[type="url"],
+.cnav-form-row input[type="number"],
 .cnav-form-row select {
 	flex: 1;
 	min-width: 0;
+}
+/* 尺寸输入行的说明文字：与 label 的宽度对齐，视觉上归属同一条目 */
+.cnav-form-hint {
+	margin: 0 0 0 78px;
+	font-size: 12px;
+	color: var(--muted);
 }
 .cnav-form-actions {
 	display: flex;
@@ -143,7 +150,27 @@
 	font-size: 12px;
 }
 
-/* ── 嵌入页（/custom/:id）── */
+/* ── 嵌入页（/custom/:id）──
+   高度基线 = 「撑满顶栏以下的剩余视口」，再叠加 --cnav-extra 的余量：
+   .app-shell 总高 = 100dvh + --cnav-extra，顶栏按内容自然排布、
+   嵌入区用 flex 吃掉剩余空间 —— iframe 因此比「刚好一屏」再高一点，
+   页面多出一小截可滚动空间，嵌入内容不会被顶到最下边缘。
+   想增减这截余量只改 --cnav-extra（改大→留白更多，改 0→正好一屏）。
+   用 .has-cnav 类选择器而非 :has()，兼容不支持 :has() 的旧浏览器。 */
+:root {
+	--cnav-extra: 40px;
+}
+.app-shell.has-cnav {
+	display: flex;
+	flex-direction: column;
+	min-height: calc(100vh + var(--cnav-extra));
+	min-height: calc(100dvh + var(--cnav-extra));
+	/* 抵消通用 .app-shell 的 64px 底部留白，否则会多出一截空白滚动 */
+	padding-bottom: 0;
+}
+.app-shell.has-cnav .topbar {
+	flex-shrink: 0;
+}
 .cnav-page {
 	display: flex;
 	flex-direction: column;
@@ -165,58 +192,19 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-/* 仅当页面内含嵌入区时，把 .app-shell 变成纵向 flex，让 iframe 填满剩余视口、页面不产生滚动条。
-   注意：:has() 与 .has-cnav 必须分开成两条独立规则——
-   若写在同一选择器列表里，不支持 :has() 的浏览器会因该选择器无效而丢弃整条规则。
-   .has-cnav 由 CustomNavPage 的 useLayoutEffect 挂到 .app-shell 上（不依赖 :has()，兼容旧浏览器）；
-   :has() 规则作为 JS 未运行时的第一帧兜底，二者只作用于嵌入页，不影响其它页面布局 */
-body.cnav-embed {
-	height: 100vh;
-	height: 100dvh;
-	overflow: hidden;
-}
-body:has(.cnav-page) {
-	height: 100vh;
-	height: 100dvh;
-	overflow: hidden;
-}
-.app-shell.has-cnav {
-	min-height: 100vh;
-	min-height: 100dvh;
-	display: flex;
-	flex-direction: column;
-}
-.app-shell:has(.cnav-page) {
-	min-height: 100vh;
-	min-height: 100dvh;
-	display: flex;
-	flex-direction: column;
-}
-.app-shell.has-cnav .topbar {
-	flex-shrink: 0;
-}
-.app-shell:has(.cnav-page) .topbar {
-	flex-shrink: 0;
-}
 .cnav-frame {
 	position: relative;
 	flex: 1;
 	min-height: 0;
 	width: 100%;
-	overflow: hidden;
 }
 .cnav-frame iframe {
-	/* 绝对定位拉伸：依赖 top:0 + bottom:0 撑满 .cnav-frame（其高度由 flex 链确定）。
-	   不能用 height:100% —— 部分浏览器不会把百分比高度解析到 flex 摊出的父容器上，
-	   iframe 会塌缩回默认 150px，这正是"矮 iframe / 大片空白"的根因。 */
-	position: absolute;
-	inset: 0;
+	display: block;
 	width: 100%;
 	height: 100%;
 	border: none;
 	background: #fff;
-	display: block;
-	/* 隐藏 iframe 自身滚动条（内容仍可滚动），追求无感嵌入 */
+	/* 隐藏 iframe 自身滚动条（内容仍可滚），追求无感嵌入 */
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 }

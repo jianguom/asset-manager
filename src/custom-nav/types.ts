@@ -16,6 +16,10 @@ export interface CustomNavItem {
 	/** 目标页面地址（http/https） */
 	url: string;
 	mode: CustomNavMode;
+	/** 嵌入模式下的 iframe 宽度（px）；留空 = 自适应（占满可用宽度） */
+	width?: number;
+	/** 嵌入模式下的 iframe 高度（px）；留空 = 撑满顶栏以下剩余视口 + --cnav-extra */
+	height?: number;
 }
 
 /** settings 表中的 KV key */
@@ -24,6 +28,21 @@ export const CUSTOM_NAV_SETTING_KEY = "custom_nav_items";
 export const CUSTOM_NAV_MAX_ITEMS = 20;
 export const CUSTOM_NAV_NAME_MAX = 40;
 export const CUSTOM_NAV_URL_MAX = 1000;
+/** 嵌入尺寸（px）的可填范围；超出会被夹到边界，非数字视为「自适应」 */
+export const CUSTOM_NAV_SIZE_MIN = 100;
+export const CUSTOM_NAV_SIZE_MAX = 4000;
+
+/**
+ * 尺寸规整：只接受有限数字（含数字字符串），夹到 [MIN, MAX] 并取整；
+ * 其它输入（空串、非数字、非正数）一律视为「自适应」= 不写入该字段。
+ * 尺寸是可选项，写坏它不该拖累整个菜单项，因此不做拒绝处理。
+ */
+function normalizeSize(value: unknown): number | undefined {
+	const candidate =
+		typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN;
+	if (!Number.isFinite(candidate) || candidate <= 0) return undefined;
+	return Math.min(CUSTOM_NAV_SIZE_MAX, Math.max(CUSTOM_NAV_SIZE_MIN, Math.round(candidate)));
+}
 
 /** 服务器端统一解析：坏数据整体回退为空列表（不影响主页渲染） */
 export function parseCustomNavItems(raw: string | null | undefined): CustomNavItem[] {
@@ -63,7 +82,13 @@ export function sanitizeCustomNavItem(value: unknown): CustomNavItem | null {
 	} catch {
 		return null;
 	}
-	return { id, name, url, mode };
+	const item: CustomNavItem = { id, name, url, mode };
+	// 尺寸按需写入：不填则完全不落这两个 key（保证存量数据与序列化结果不变）
+	const width = normalizeSize(entry.width);
+	if (width !== undefined) item.width = width;
+	const height = normalizeSize(entry.height);
+	if (height !== undefined) item.height = height;
+	return item;
 }
 
 /** 序列化（存库用） */

@@ -12,10 +12,14 @@ import "./custom-nav.css";
  * 顶栏点击「嵌入」模式的菜单后，在应用壳内用 iframe 无感集成目标页面：
  * 顶部导航栏保持原样，看起来就是当前应用的一部分。
  *
- * - iframe 高度由纯 CSS flex 高度链撑满剩余视口（见 custom-nav.css 的
- *   `.app-shell:has(.cnav-page)`），页面本身不产生滚动条；
+ * - iframe 尺寸有两种来源：
+ *   ① 菜单里未填宽/高 → 纯 CSS flex 高度链撑满顶栏以下的剩余视口，再叠加
+ *      `--cnav-extra` 的余量（见 custom-nav.css 的 `.app-shell.has-cnav`），
+ *      比"刚好一屏"略高一点，页面因此多出一小截可滚动空间；
+ *   ② 菜单里填了宽/高 → 按配置尺寸锁死 iframe，不再跟随视口推算
+ *      （宽、高各自独立生效：只填宽度时高度仍自适应）；
  * - iframe 去边框并隐藏自身滚动条（内容仍可滚），呈现"无感"效果；
- * - 加载超过 8 秒未完成时，在 iframe 区域内顶部浮现小气泡提示（不遮挡页面），
+ * - 加载超过 20 秒未完成时，在 iframe 区域内顶部浮现小气泡提示（不遮挡页面），
  *   load 事件触发后自动消失。
  */
 export function CustomNavPage() {
@@ -27,19 +31,28 @@ export function CustomNavPage() {
 
 	const [slow, setSlow] = useState(false);
 
-	// 给共享的 .app-shell 加 has-cnav、body 加 cnav-embed 标记，配合 custom-nav.css
-	// 的类选择器建立 flex 高度链并钉死 body 高度（页面不产生滚动条）。
+	// 菜单里配置了尺寸时按配置锁死 iframe：填了高度就脱离视口高度链（flex 置为不伸缩，
+	// 否则 flex:1 会把 inline 高度再撑开）；只填宽度时高度仍走自适应。
+	const locked =
+		item && item.mode === "embed" && (item.width || item.height)
+			? {
+					width: item.width ? `${item.width}px` : undefined,
+					height: item.height ? `${item.height}px` : undefined,
+					flex: item.height ? "0 0 auto" : undefined,
+				}
+			: undefined;
+
+	// 未锁定高度时给共享的 .app-shell 加 has-cnav：custom-nav.css 据此把外壳变成纵向 flex，
+	// 让 iframe 吃掉顶栏以下的剩余视口，并叠加 --cnav-extra 的余量。
 	// 用类选择器而非 :has()，兼容不支持 :has() 的旧浏览器（useLayoutEffect 在首帧绘制前生效）。
 	useLayoutEffect(() => {
-		if (!item || item.mode !== "embed") return;
+		if (!item || item.mode !== "embed" || item.height) return;
 		const shell = document.querySelector(".app-shell");
 		shell?.classList.add("has-cnav");
-		document.body.classList.add("cnav-embed");
 		return () => {
 			shell?.classList.remove("has-cnav");
-			document.body.classList.remove("cnav-embed");
 		};
-	}, [item?.id, item?.url]);
+	}, [item?.id, item?.url, item?.height]);
 
 	useEffect(() => {
 		if (!item || item.mode !== "embed") return;
@@ -58,7 +71,7 @@ export function CustomNavPage() {
 						{t.openTab}
 					</a>
 				</div>
-				<div className="cnav-frame">
+				<div className="cnav-frame" style={locked}>
 					<iframe
 						title={item.name}
 						src={item.url}
