@@ -168,8 +168,9 @@
 	flex: 1;
 	min-height: 0;
 	width: 100%;
-	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖 */
-	height: calc(100dvh - 184px);
+	overflow: hidden;
+	/* JS 测量前的首帧兜底，测量完成后由内联 style 覆盖（不用 dvh，避免旧浏览器无效值塌缩） */
+	height: 60vh;
 }
 .cnav-frame iframe {
 	width: 100%;

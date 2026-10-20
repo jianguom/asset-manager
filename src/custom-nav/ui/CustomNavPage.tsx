@@ -37,20 +37,35 @@ export function CustomNavPage() {
 		return () => window.clearTimeout(timer);
 	}, [item?.id, item?.url]);
 
-	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条
+	// 运行时精确测量：iframe 恰好填满顶栏之下、底部留白之上的剩余空间，避免页面滚动条。
+	// 用文档坐标（rect.top + scrollY），不受路由切换后残留滚动位置影响。
 	useLayoutEffect(() => {
 		if (!item || item.mode !== "embed") return;
 		const measure = () => {
 			if (!pageRef.current) return;
-			const top = pageRef.current.getBoundingClientRect().top;
+			const docTop = pageRef.current.getBoundingClientRect().top + window.scrollY;
 			const toolbarH = toolbarRef.current?.offsetHeight ?? 0;
 			// 8 = .cnav-page 的 gap，64 = .app-shell 的 padding-bottom
-			const available = window.innerHeight - top - toolbarH - 72;
-			setFrameH(Math.max(available, 240));
+			const available = window.innerHeight - docTop - toolbarH - 72;
+			const next = Math.max(available, 240);
+			setFrameH((prev) => (prev === next ? prev : next));
 		};
+		// 切到嵌入页时复位滚动，避免上个页面的滚动位置干扰测量与观感
+		window.scrollTo(0, 0);
 		measure();
+		// 首帧之后、布局稳定后再补测（字体加载/顶栏换行都可能改变高度）
+		const t1 = window.setTimeout(measure, 50);
+		const t2 = window.setTimeout(measure, 500);
+		document.fonts?.ready?.then(measure).catch(() => undefined);
+		const ro = new ResizeObserver(measure);
+		if (pageRef.current) ro.observe(pageRef.current);
 		window.addEventListener("resize", measure);
-		return () => window.removeEventListener("resize", measure);
+		return () => {
+			window.clearTimeout(t1);
+			window.clearTimeout(t2);
+			ro.disconnect();
+			window.removeEventListener("resize", measure);
+		};
 	}, [item?.id, item?.url]);
 
 	if (item && item.mode === "embed") {
