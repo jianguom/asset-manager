@@ -166,13 +166,16 @@
 	white-space: nowrap;
 }
 /* 仅当页面内含嵌入区时，把 .app-shell 变成纵向 flex，让 iframe 填满剩余视口、页面不产生滚动条。
-   :has() 使该规则只作用于嵌入页，不影响其它页面的 .app-shell 布局 */
+   .has-cnav 由 CustomNavPage 的 useLayoutEffect 挂到 .app-shell 上（不依赖 :has()，兼容旧浏览器）；
+   :has() 规则作为 JS 未运行时的第一帧兜底，二者只作用于嵌入页，不影响其它页面布局 */
+.app-shell.has-cnav,
 .app-shell:has(.cnav-page) {
 	min-height: 100vh;
 	min-height: 100dvh;
 	display: flex;
 	flex-direction: column;
 }
+.app-shell.has-cnav .topbar,
 .app-shell:has(.cnav-page) .topbar {
 	flex-shrink: 0;
 }
