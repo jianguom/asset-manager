@@ -67,6 +67,19 @@ describe("自定义导航菜单（src/custom-nav/）", () => {
 		expect(badId.status).toBe(400);
 	});
 
+	it("接受 36 位完整 UUID 样式的 id（前端曾用它导致保存被拒的回归用例）", async () => {
+		const { cookie } = await bootstrap();
+		const uuid = "518cc80b-0609-8474-3d9d-535751d16839";
+		const saved = await call<Envelope<{ items: unknown[] }>>(NAV, {
+			method: "PUT",
+			cookie,
+			body: JSON.stringify({ items: [{ id: uuid, name: "驾驶舱", url: "https://memos.tianrong.ltd/embed/stocks?token=abc&w=1200", mode: "embed" }] }),
+		});
+		expect(saved.status).toBe(200);
+		expect(saved.body.data.items).toHaveLength(1);
+		expect(saved.body.data.items[0]).toMatchObject({ id: uuid, name: "驾驶舱" });
+	});
+
 	it("settings 表里只存一条 custom_nav_items，无需迁移", async () => {
 		const { cookie } = await bootstrap();
 		const items = [{ id: "only", name: "仅此一项", url: "https://example.com", mode: "embed" }];

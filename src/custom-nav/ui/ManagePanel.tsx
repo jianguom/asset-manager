@@ -10,7 +10,11 @@ interface Props {
 	onSaved: (items: CustomNavItem[]) => void;
 }
 
-const newId = () => (crypto?.randomUUID?.() ?? `nav-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+// 生成短 id（≤32 字符）：完整 UUID 有 36 位，会超服务端 id 长度上限导致保存被拒
+const newId = () =>
+	crypto?.randomUUID?.()
+		? crypto.randomUUID().replace(/-/g, "").slice(0, 16)
+		: `nav-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export function ManagePanel({ items, onClose, onSaved }: Props) {
 	const t = navText(useT().lang);

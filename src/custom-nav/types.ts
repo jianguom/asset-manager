@@ -53,7 +53,8 @@ export function sanitizeCustomNavItem(value: unknown): CustomNavItem | null {
 	const name = typeof entry.name === "string" ? entry.name.trim() : "";
 	const url = typeof entry.url === "string" ? entry.url.trim() : "";
 	const mode = entry.mode === "tab" ? "tab" : "embed";
-	if (!/^[a-zA-Z0-9-]{1,32}$/.test(id)) return null;
+	// id 格式校验：字母数字与连字符，最长 40（前端生成 16 位短 id，放宽上限兜底历史数据）
+	if (!/^[a-zA-Z0-9-]{1,40}$/.test(id)) return null;
 	if (!name || name.length > CUSTOM_NAV_NAME_MAX) return null;
 	if (!url || url.length > CUSTOM_NAV_URL_MAX) return null;
 	try {
