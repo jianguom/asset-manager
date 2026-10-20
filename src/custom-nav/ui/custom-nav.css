@@ -179,21 +179,13 @@
 	background: #fff;
 	display: block;
 }
-.cnav-stuck {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 12px;
-	padding: 24px;
-	text-align: center;
-	background: var(--surface);
-	color: var(--muted);
-	border-radius: var(--radius);
-}
-.cnav-stuck p {
+/* 非遮挡提示条：不覆盖 iframe，仅作加载过慢/嵌入被拒的兜底提示 */
+.cnav-slow {
 	margin: 0;
-	max-width: 460px;
+	font-size: 13px;
+	color: var(--muted);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
 }
