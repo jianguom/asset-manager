@@ -150,6 +150,7 @@
 	gap: 8px;
 }
 .cnav-toolbar {
+	flex: 0 0 auto;
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -164,12 +165,15 @@
 }
 .cnav-frame {
 	position: relative;
+	flex: 1;
+	min-height: 0;
 	width: 100%;
 }
 .cnav-frame iframe {
 	width: 100%;
-	height: calc(100vh - 150px);
-	min-height: 480px;
+	height: calc(100vh - 184px); /* 老浏览器兜底 */
+	height: calc(100dvh - 184px);
+	min-height: 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	background: #fff;

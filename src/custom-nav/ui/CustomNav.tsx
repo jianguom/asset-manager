@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useRouter } from "../../web/lib/router";
 import { useAsync } from "../../web/lib/useAsync";
 import { useT } from "../../web/lib/i18n";
-import { getNavItems } from "./store";
+import { getNavItems, subscribeNav } from "./store";
 import { navText } from "./text";
 import { ManagePanel } from "./ManagePanel";
 import type { CustomNavItem } from "../types";
@@ -13,18 +13,26 @@ import "./custom-nav.css";
  * 顶栏自定义导航（渲染进 App.tsx 的 <nav>，纯追加式接线）
  *
  * embed 模式走站内路由 /custom/:id（由 CustomNavPage 用 iframe 嵌入应用壳）；
- * tab 模式直接新标签打开。末尾的齿轮按钮打开全局管理面板。
+ * tab 模式直接新标签打开。两个子组件分开挂载：
+ * - CustomNavLinks：菜单链接，紧跟"总览"之后
+ * - CustomNavGear：齿轮（管理入口），放在"设置"之后
  */
-export function CustomNav() {
+export function CustomNavLinks() {
 	const { path } = useRouter();
-	const t = navText(useT().lang);
 	const { data, setData } = useAsync(() => getNavItems(), []);
-	const [managing, setManaging] = useState(false);
-	const items = data ?? [];
+
+	// 管理面板保存后订阅通知，重新拉取并刷新链接
+	useEffect(
+		() =>
+			subscribeNav(() => {
+				getNavItems(true).then(setData).catch(() => undefined);
+			}),
+		[setData],
+	);
 
 	return (
 		<>
-			{items.map((item) =>
+			{(data ?? []).map((item) =>
 				item.mode === "tab" ? (
 					<a
 						key={item.id}
@@ -41,6 +49,19 @@ export function CustomNav() {
 					</Link>
 				),
 			)}
+		</>
+	);
+}
+
+/** 齿轮管理入口 + 全局管理面板（Portal 到 body，避免被顶栏 backdrop-filter 的包含块截断） */
+export function CustomNavGear() {
+	const t = navText(useT().lang);
+	const { data, setData } = useAsync(() => getNavItems(), []);
+	const [managing, setManaging] = useState(false);
+	const items = data ?? [];
+
+	return (
+		<>
 			<button type="button" className="cnav-gear" title={t.manage} aria-label={t.manage} onClick={() => setManaging(true)}>
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 					<circle cx="12" cy="12" r="3" />
@@ -48,9 +69,6 @@ export function CustomNav() {
 				</svg>
 			</button>
 			{managing &&
-				// 必须用 Portal 渲染到 document.body：
-				// .topbar 有 backdrop-filter，会给 position:fixed 建立包含块，
-				// 不逃出去的话弹窗会被锁在顶栏那一小块里（表现为小 iframe + 滚动条）。
 				createPortal(
 					<ManagePanel
 						items={items}

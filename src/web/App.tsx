@@ -21,7 +21,7 @@ const SettingsPage = lazy(() => import("./pages/Settings").then((module) => ({ d
 // 独立功能：持仓交易流水（/trades/:holdingId），来自 src/trades/
 const TradesPage = lazy(() => import("../trades/ui/TradesPage").then((module) => ({ default: module.TradesPage })));
 // 独立功能：自定义导航菜单（顶栏渲染 + /custom/:id 嵌入页），来自 src/custom-nav/
-import { CustomNav } from "../custom-nav/ui/CustomNav";
+import { CustomNavGear, CustomNavLinks } from "../custom-nav/ui/CustomNav";
 const CustomNavPage = lazy(() => import("../custom-nav/ui/CustomNavPage").then((module) => ({ default: module.CustomNavPage })));
 
 function PageLoading() {
@@ -61,8 +61,9 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
 							<Link to={item.to} className={path === item.to ? "active" : ""}>
 								{t(item.key)}
 							</Link>
-							{/* 独立功能：自定义导航菜单紧跟"总览"之后显示 */}
-							{index === 0 && <CustomNav />}
+							{/* 独立功能：自定义导航菜单链接紧跟"总览"之后、管理齿轮放在"设置"之后 */}
+							{index === 0 && <CustomNavLinks />}
+							{index === NAV.length - 1 && <CustomNavGear />}
 						</Fragment>
 					))}
 				</nav>

@@ -9,6 +9,18 @@ import { navApi } from "./api";
 
 let cached: Promise<CustomNavItem[]> | null = null;
 
+/** 保存后通知订阅方（顶栏链接组件需要刷新） */
+const listeners = new Set<() => void>();
+export function subscribeNav(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => {
+		listeners.delete(listener);
+	};
+}
+function notify() {
+	for (const listener of listeners) listener();
+}
+
 export function getNavItems(force = false): Promise<CustomNavItem[]> {
 	if (!cached || force) {
 		cached = navApi.get().then((res) => res.items).catch((error) => {
@@ -23,5 +35,6 @@ export function getNavItems(force = false): Promise<CustomNavItem[]> {
 export async function saveNavItems(items: CustomNavItem[]): Promise<CustomNavItem[]> {
 	const saved = await navApi.put(items).then((res) => res.items);
 	cached = Promise.resolve(saved);
+	notify();
 	return saved;
 }
