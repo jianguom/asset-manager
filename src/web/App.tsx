@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, type AuthMeDto } from "./lib/api";
 import { useAsync } from "./lib/useAsync";
 import { Link, RouterProvider, useRouter } from "./lib/router";
@@ -56,12 +56,15 @@ function Shell({ onAuthChanged }: { onAuthChanged: () => void }) {
 			<div className="topbar">
 				<span className="brand">{t("app.name")}</span>
 				<nav className="nav">
-					{NAV.map((item) => (
-						<Link key={item.to} to={item.to} className={path === item.to ? "active" : ""}>
-							{t(item.key)}
-						</Link>
+					{NAV.map((item, index) => (
+						<Fragment key={item.to}>
+							<Link to={item.to} className={path === item.to ? "active" : ""}>
+								{t(item.key)}
+							</Link>
+							{/* 独立功能：自定义导航菜单紧跟"总览"之后显示 */}
+							{index === 0 && <CustomNav />}
+						</Fragment>
 					))}
-					<CustomNav />
 				</nav>
 				<div className="spacer" />
 				<button

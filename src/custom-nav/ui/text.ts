@@ -26,6 +26,7 @@ export interface NavText {
 	empty: string;
 	notFound: string;
 	openTab: string;
+	embedBlocked: string;
 	nameRequired: string;
 	invalidUrl: string;
 	itemsCount: (n: number) => string;
@@ -52,6 +53,7 @@ const DICT: { zh: NavText; en: NavText } = {
 		empty: "还没有自定义菜单",
 		notFound: "找不到该自定义菜单",
 		openTab: "在新标签打开",
+		embedBlocked: "该网站拒绝了嵌入显示（服务端设置了 X-Frame-Options / frame-ancestors），请在新标签打开，或在服务端放开嵌入限制。",
 		nameRequired: "请输入菜单名称",
 		invalidUrl: "请输入有效的 http(s) 地址",
 		itemsCount: (n: number) => (n ? `共 ${n} 项` : ""),
@@ -76,6 +78,7 @@ const DICT: { zh: NavText; en: NavText } = {
 		empty: "No custom menus yet",
 		notFound: "Custom menu not found",
 		openTab: "Open in new tab",
+		embedBlocked: "This site refused to be embedded (server sends X-Frame-Options / frame-ancestors). Open in a new tab, or relax the embedding restriction on the server.",
 		nameRequired: "Please enter a menu name",
 		invalidUrl: "Please enter a valid http(s) URL",
 		itemsCount: (n: number) => (n ? `${n} item(s)` : ""),
