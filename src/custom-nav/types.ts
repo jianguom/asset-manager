@@ -16,6 +16,11 @@ export interface CustomNavItem {
 	/** 目标页面地址（http/https） */
 	url: string;
 	mode: CustomNavMode;
+	/**
+	 * 跨域页面上报内容高度时使用的消息 type（可选）。
+	 * 留空 = 自动识别（type 含 height / resize / size 即认为在上报尺寸）。
+	 */
+	heightMessageType?: string;
 }
 
 /** settings 表中的 KV key */
@@ -24,6 +29,8 @@ export const CUSTOM_NAV_SETTING_KEY = "custom_nav_items";
 export const CUSTOM_NAV_MAX_ITEMS = 20;
 export const CUSTOM_NAV_NAME_MAX = 40;
 export const CUSTOM_NAV_URL_MAX = 1000;
+/** 高度消息 type 的最大长度（如 memos-embed-height） */
+export const CUSTOM_NAV_HEIGHT_TYPE_MAX = 80;
 
 /** 服务器端统一解析：坏数据整体回退为空列表（不影响主页渲染） */
 export function parseCustomNavItems(raw: string | null | undefined): CustomNavItem[] {
@@ -65,7 +72,14 @@ export function sanitizeCustomNavItem(value: unknown): CustomNavItem | null {
 	}
 	// 尺寸不再由菜单配置：嵌入页固定「容器最大 1200px 居中 + 高度跟随内容」。
 	// 历史数据里的 width / height 会被这里丢弃（下次保存即清理干净）。
-	return { id, name, url, mode };
+	const item: CustomNavItem = { id, name, url, mode };
+	// 高度上报 type 是可选项：写坏（过长、含空白）视为未填，退回自动识别，不拖累整条菜单
+	const heightMessageType =
+		typeof entry.heightMessageType === "string" && entry.heightMessageType.trim().length <= CUSTOM_NAV_HEIGHT_TYPE_MAX
+			? entry.heightMessageType.trim()
+			: "";
+	if (heightMessageType && !/\s/.test(heightMessageType)) item.heightMessageType = heightMessageType;
+	return item;
 }
 
 /** 序列化（存库用） */

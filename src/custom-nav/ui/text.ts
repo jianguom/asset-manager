@@ -23,6 +23,9 @@ export interface NavText {
 	tab: string;
 	namePlaceholder: string;
 	urlPlaceholder: string;
+	heightType: string;
+	heightTypePlaceholder: string;
+	heightTypeHint: string;
 	empty: string;
 	notFound: string;
 	openTab: string;
@@ -49,6 +52,9 @@ const DICT: { zh: NavText; en: NavText } = {
 		tab: "新标签打开",
 		namePlaceholder: "例如：我的面板",
 		urlPlaceholder: "https://example.com",
+		heightType: "高度消息类型",
+		heightTypePlaceholder: "留空 = 自动识别",
+		heightTypeHint: "跨域页面通过 postMessage 上报内容高度时用的 type（如 memos-embed-height）；留空则自动识别含 height/resize/size 的消息",
 		empty: "还没有自定义菜单",
 		notFound: "找不到该自定义菜单",
 		openTab: "在新标签打开",
@@ -73,6 +79,9 @@ const DICT: { zh: NavText; en: NavText } = {
 		tab: "New tab",
 		namePlaceholder: "e.g. My dashboard",
 		urlPlaceholder: "https://example.com",
+		heightType: "Height message type",
+		heightTypePlaceholder: "blank = auto-detect",
+		heightTypeHint: "Message type used by the embedded page to report its content height (e.g. memos-embed-height). Leave blank to auto-detect messages containing height/resize/size",
 		empty: "No custom menus yet",
 		notFound: "Custom menu not found",
 		openTab: "Open in new tab",

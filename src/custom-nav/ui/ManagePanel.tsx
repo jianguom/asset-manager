@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CUSTOM_NAV_HEIGHT_TYPE_MAX } from "../types";
 import type { CustomNavItem, CustomNavMode } from "../types";
 import { saveNavItems } from "./store";
 import { navText } from "./text";
@@ -16,9 +17,9 @@ const newId = () =>
 		? crypto.randomUUID().replace(/-/g, "").slice(0, 16)
 		: `nav-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-type FormState = { name: string; url: string; mode: CustomNavMode };
+type FormState = { name: string; url: string; mode: CustomNavMode; heightType: string };
 
-const EMPTY_FORM: FormState = { name: "", url: "", mode: "embed" };
+const EMPTY_FORM: FormState = { name: "", url: "", mode: "embed", heightType: "" };
 
 export function ManagePanel({ items, onClose, onSaved }: Props) {
 	const t = navText(useT().lang);
@@ -29,7 +30,7 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 	const [error, setError] = useState<string | null>(null);
 
 	const beginEdit = (item: CustomNavItem) => {
-		setForm({ name: item.name, url: item.url, mode: item.mode });
+		setForm({ name: item.name, url: item.url, mode: item.mode, heightType: item.heightMessageType ?? "" });
 		setEditingId(item.id);
 	};
 
@@ -57,8 +58,17 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 			setError(t.invalidUrl);
 			return;
 		}
-		// 尺寸不再可配：嵌入页统一「容器最大 1200px 居中 + 高度跟随内容」
-		setList((prev) => prev.map((item) => (item.id === editingId ? { ...item, name, url, mode: form.mode } : item)));
+		// 尺寸不再可配：嵌入页统一「容器最大 1200px 居中 + 高度跟随内容」。
+		// 高度上报 type 是可选覆盖项（留空 = 自动识别），切到新标签打开时一并清掉。
+		setList((prev) =>
+			prev.map((item) => {
+				if (item.id !== editingId) return item;
+				const next: CustomNavItem = { id: item.id, name, url, mode: form.mode };
+				const heightType = form.mode === "embed" ? form.heightType.trim() : "";
+				if (heightType) next.heightMessageType = heightType;
+				return next;
+			}),
+		);
 		setEditingId(null);
 		setForm(EMPTY_FORM);
 		setError(null);
@@ -142,6 +152,21 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 									<option value="tab">{t.tab}</option>
 								</select>
 							</div>
+							{form.mode === "embed" && (
+								<>
+									<div className="cnav-form-row">
+										<label>{t.heightType}</label>
+										<input
+											type="text"
+											value={form.heightType}
+											maxLength={CUSTOM_NAV_HEIGHT_TYPE_MAX}
+											placeholder={t.heightTypePlaceholder}
+											onChange={(event) => setForm({ ...form, heightType: event.target.value })}
+										/>
+									</div>
+									<p className="cnav-form-hint">{t.heightTypeHint}</p>
+								</>
+							)}
 							<div className="cnav-form-actions">
 								<button className="ghost" onClick={cancelEdit}>{t.cancel}</button>
 								<button onClick={saveRow}>{t.save}</button>

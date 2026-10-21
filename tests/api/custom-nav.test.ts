@@ -105,4 +105,28 @@ describe("自定义导航菜单（src/custom-nav/）", () => {
 		const fetched = await call<Envelope<{ items: Array<Record<string, unknown>> }>>(NAV, { cookie });
 		expect(fetched.body.data.items).toEqual(saved.body.data.items);
 	});
+
+	it("高度消息 type 可选：保留合法值并去除首尾空白，留空 / 超长 / 含空白视为自动识别", async () => {
+		const { cookie } = await bootstrap();
+		const base = { url: "https://example.com/panel", mode: "embed" };
+		const saved = await call<Envelope<{ items: Array<Record<string, unknown>> }>>(NAV, {
+			method: "PUT",
+			cookie,
+			body: JSON.stringify({
+				items: [
+					{ ...base, id: "memos", name: "memos", heightMessageType: "  memos-embed-height  " },
+					{ ...base, id: "blank", name: "留空", heightMessageType: "   " },
+					{ ...base, id: "long", name: "超长", heightMessageType: "h".repeat(81) },
+					{ ...base, id: "space", name: "含空白", heightMessageType: "has space" },
+				],
+			}),
+		});
+		expect(saved.status).toBe(200);
+		const items = saved.body.data.items;
+		expect(items[0].heightMessageType).toBe("memos-embed-height");
+		// 三种写坏的情况都退回「自动识别」，不因此拒绝整条菜单
+		expect(items[1].heightMessageType).toBeUndefined();
+		expect(items[2].heightMessageType).toBeUndefined();
+		expect(items[3].heightMessageType).toBeUndefined();
+	});
 });

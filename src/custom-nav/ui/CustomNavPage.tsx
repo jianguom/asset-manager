@@ -9,22 +9,64 @@ import "./custom-nav.css";
 /**
  * 自定义菜单嵌入页（/custom/:id）
  *
- * 尺寸策略（菜单里不再配置宽高）：
+ * 尺寸策略（菜单里不配置宽高）：
  *   - 外层容器 .cnav-frame：PC 端最大 1200px 居中、两侧留空；窄屏自动撑满（见 custom-nav.css）
  *   - iframe 宽度跟随容器 100%
  *   - iframe 高度自动跟随被嵌页面内容高度，全程隐藏滚动条
  *
  * 高度来源（按可行性依次尝试）：
  *   ① 同源页面：直接读 contentDocument 的 scrollHeight，并用 ResizeObserver 跟随内容变化；
- *   ② 跨源页面：读不到文档，改为监听对方 postMessage 上报
- *      `{ type: "cnav:height", height: 1234 }`，并在加载完成 / 窗口尺寸变化时主动发
- *      `{ type: "cnav:request-height" }` 请求对方上报；
- *   ③ 两者都拿不到（跨源且页面未配合）：退化为 CSS 的视口高度兜底，页面自身仍可滚动。
+ *   ② 跨源页面：读不到文档，改为监听对端 postMessage 上报（各实现 type 不统一，见下）；
+ *   ③ 都没拿到（跨源且页面不上报）：退化为 CSS 的视口高度兜底，页面自身仍可滚动。
  *
- * 窗口尺寸变化时重新量取（同源）或重新请求上报（跨源），宽度由 CSS 100% 自动适配。
+ * 跨源上报的通用识别：
+ *   - 自动模式（菜单未填 heightMessageType）：type 含 height / resize / size 即认，
+ *     也接受纯数字载荷、无 type 的 { height } 载荷；
+ *   - 覆盖模式（菜单填了 heightMessageType）：只认这个 type（仍兼容本站的 cnav:height）；
+ *   - 载荷归一化：数字、"1234px"、JSON 字符串、{height} / {data:{height}} / {payload:{height}} 等；
+ *   - 防误判：来源必须是本 iframe、高度需在 [100, 50000] 内、变化小于 2px 不重排。
  */
 const HEIGHT_MESSAGE = "cnav:height";
 const HEIGHT_REQUEST = "cnav:request-height";
+/** 自动识别时，type 里出现这些词就认为是在上报尺寸 */
+const HEIGHT_TYPE_HINT = /height|resize|size/i;
+/** 合法内容高度范围（px），超出视为噪声 */
+const HEIGHT_MIN = 100;
+const HEIGHT_MAX = 50000;
+/** 小于该增量的变化忽略，避免与页面自身 resize 来回抖动 */
+const HEIGHT_JITTER = 2;
+
+/** 把各家的上报载荷归一化成像素高度：数字 / "1234px" / JSON 字符串 / 多层对象 */
+function readHeight(source: unknown, depth = 0): number | undefined {
+	if (depth > 3 || source == null) return undefined;
+	if (typeof source === "number") return Number.isFinite(source) ? source : undefined;
+	if (typeof source === "string") {
+		const text = source.trim();
+		if (!text) return undefined;
+		const numeric = Number(text.replace(/px$/i, ""));
+		if (Number.isFinite(numeric)) return numeric;
+		try {
+			return readHeight(JSON.parse(text), depth + 1);
+		} catch {
+			return undefined;
+		}
+	}
+	if (typeof source !== "object") return undefined;
+	const record = source as Record<string, unknown>;
+	for (const key of ["height", "scrollHeight", "contentHeight", "h", "value", "size"]) {
+		const value = record[key];
+		if (typeof value === "number" && Number.isFinite(value)) return value;
+		if (typeof value === "string") {
+			const numeric = Number(value.trim().replace(/px$/i, ""));
+			if (Number.isFinite(numeric)) return numeric;
+		}
+	}
+	for (const key of ["data", "payload", "detail", "result"]) {
+		const nested = readHeight(record[key], depth + 1);
+		if (nested !== undefined) return nested;
+	}
+	return undefined;
+}
 
 export function CustomNavPage() {
 	const { path } = useRouter();
@@ -37,6 +79,14 @@ export function CustomNavPage() {
 	const [height, setHeight] = useState<number | null>(null);
 
 	const isEmbed = Boolean(item && item.mode === "embed");
+	const expectedType = item?.heightMessageType;
+
+	/** 统一入口：取整 + 范围校验 + 抖动抑制 */
+	const applyHeight = useCallback((raw: number) => {
+		const next = Math.round(raw);
+		if (!Number.isFinite(next) || next < HEIGHT_MIN || next > HEIGHT_MAX) return;
+		setHeight((prev) => (prev === null || Math.abs(prev - next) >= HEIGHT_JITTER ? next : prev));
+	}, []);
 
 	/** 同源量取内容高度；跨源（contentDocument 为 null）返回 false，交由 postMessage 处理 */
 	const measure = useCallback(() => {
@@ -44,9 +94,9 @@ export function CustomNavPage() {
 		if (!doc) return false;
 		const next = Math.max(doc.documentElement?.scrollHeight ?? 0, doc.body?.scrollHeight ?? 0);
 		if (next <= 0) return false;
-		setHeight(next);
+		applyHeight(next);
 		return true;
-	}, []);
+	}, [applyHeight]);
 
 	/** 请跨源页面重新上报高度（对方未监听则无副作用） */
 	const requestHeight = useCallback(() => {
@@ -86,24 +136,36 @@ export function CustomNavPage() {
 		};
 	}, [item?.id, item?.url, isEmbed, measure, requestHeight]);
 
-	// 跨源高度上报：只接受来自本 iframe 的消息
+	// 跨源高度上报：只接受来自本 iframe 的消息，并做 type 归一化识别
 	useEffect(() => {
 		if (!isEmbed) return;
 		const onMessage = (event: MessageEvent) => {
 			const frame = frameRef.current;
 			if (!frame || event.source !== frame.contentWindow) return;
+
 			const payload = event.data as unknown;
-			const value =
-				typeof payload === "number"
-					? payload
-					: payload && typeof payload === "object" && (payload as { type?: unknown }).type === HEIGHT_MESSAGE
-						? (payload as { height?: unknown }).height
-						: undefined;
-			if (typeof value === "number" && Number.isFinite(value) && value > 0) setHeight(Math.round(value));
+			const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+			const typeText = record && typeof record.type === "string" ? record.type : "";
+
+			let accepted: boolean;
+			if (expectedType) {
+				// 覆盖模式：只认指定 type（本站协议始终兼容）
+				accepted = typeText.toLowerCase() === expectedType.toLowerCase() || typeText === HEIGHT_MESSAGE;
+			} else if (typeText) {
+				// 自动模式：type 关键字命中即认为在上报尺寸
+				accepted = typeText === HEIGHT_MESSAGE || HEIGHT_TYPE_HINT.test(typeText);
+			} else {
+				// 无 type：只接受纯数字，或形如 { height: n } 的载荷
+				accepted = typeof payload === "number" || (record !== null && "height" in record);
+			}
+			if (!accepted) return;
+
+			const next = readHeight(payload);
+			if (next !== undefined) applyHeight(next);
 		};
 		window.addEventListener("message", onMessage);
 		return () => window.removeEventListener("message", onMessage);
-	}, [isEmbed]);
+	}, [isEmbed, expectedType, applyHeight]);
 
 	// 屏幕尺寸变化：重新量取（同源），或请对端重新上报（跨源）
 	useEffect(() => {

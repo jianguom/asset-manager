@@ -108,6 +108,12 @@
 	flex: 1;
 	min-width: 0;
 }
+/* 可选字段的说明文字：与 label 的宽度对齐，视觉上归属同一条目 */
+.cnav-form-hint {
+	margin: 0 0 0 78px;
+	font-size: 12px;
+	color: var(--muted);
+}
 .cnav-form-actions {
 	display: flex;
 	gap: 8px;

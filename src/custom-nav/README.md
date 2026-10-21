@@ -10,6 +10,8 @@
 - 引入提交：`1644a37`（菜单功能）、`cf09e14`（管理弹窗 Portal 修复）、
   `779e598`（曾支持手动宽高锁定，已于 2026-10-21 移除）、`22d6d2e`（iframe 背景透明 + 移除加载提示与「在新标签打开」入口）
 - **嵌入尺寸**：菜单不配宽高；外层容器 PC 端最大 1200px 居中、移动端撑满，iframe 宽度 100%、高度跟随被嵌页面内容
+- **跨域高度**：自动嗅探 `postMessage`（type 含 height/resize/size，载荷归一化，兼容 memos 的 `memos-embed-height`）；
+  异常页面可在菜单里填 `heightMessageType` 精确指定；都不行才退化为视口高度兜底
 - **零迁移**：不建表、不 bump `SCHEMA_VERSION`，配置存 `settings` 表 KV key = `custom_nav_items`
 - 接线点仅 **3 处**：`src/worker/api/index.ts`、`src/web/App.tsx`、`public/_headers`
 - 前端 API 客户端 / 文案字典均**自包含**，不依赖 `src/web/lib/*`，保证本目录可整体独立同步
@@ -27,16 +29,18 @@
 export type CustomNavMode = "embed" | "tab";
 
 export interface CustomNavItem {
-  id: string;            // 短 id：字母数字与连字符，用于站内路由 /custom/:id
-  name: string;          // 菜单显示名
-  url: string;           // http/https
+  id: string;                   // 短 id：字母数字与连字符，用于站内路由 /custom/:id
+  name: string;                 // 菜单显示名
+  url: string;                  // http/https
   mode: CustomNavMode;
+  heightMessageType?: string;   // 可选：跨域页面上报高度用的消息 type；留空 = 自动识别
 }
 
 export const CUSTOM_NAV_SETTING_KEY = "custom_nav_items";
 export const CUSTOM_NAV_MAX_ITEMS = 20;
 export const CUSTOM_NAV_NAME_MAX = 40;
 export const CUSTOM_NAV_URL_MAX = 1000;
+export const CUSTOM_NAV_HEIGHT_TYPE_MAX = 80;
 ```
 
 函数：
@@ -44,6 +48,8 @@ export const CUSTOM_NAV_URL_MAX = 1000;
 - `sanitizeCustomNavItem(value)`：单条清洗。`id` 必须匹配 `/^[a-zA-Z0-9-]{1,40}$/`；
   `name` 非空且 ≤ 40；`url` 非空且 ≤ 1000 且协议为 `http:`/`https:`；`mode` 非 `tab` 时按 `embed` 兜底。
   **尺寸不再是配置项**：历史数据里的 `width` / `height` 会被丢弃（下次保存即清理干净）
+- `heightMessageType` 清洗：去首尾空白；为空、超 80 字符、含空白字符 → 视为未填（退回自动识别），
+  **不会因此拒绝整条菜单**（可选字段写坏不该拖累主数据）
 - `parseCustomNavItems(raw)`：整体解析，坏数据回退空列表（不影响主页渲染），最多取 20 项
 - `serializeCustomNavItems(items)`：序列化存库
 
@@ -74,7 +80,7 @@ PUT 校验：`items` 必须数组；逐条 `sanitizeCustomNavItem`，任一非�
   - `CustomNavLinks`：菜单链接，`embed` 走站内 `Link → /custom/:id`，`tab` 走 `<a target="_blank" rel="noopener noreferrer">`
   - `CustomNavGear`：齿轮管理入口，**用 `createPortal` 渲染到 `document.body`**（见第 7 节第 1 条坑）
 - `src/custom-nav/ui/ManagePanel.tsx`：管理面板
-  - 表单：菜单名称 / 页面地址 / 打开方式（**已无宽高输入**）
+  - 表单：菜单名称 / 页面地址 / 打开方式 / **高度消息类型（仅嵌入模式，可选，留空 = 自动识别）**
   - 支持上下移动、行内编辑、删除；整表 `saveNavItems`
   - `newId()`：16 位（`crypto.randomUUID()` 去连字符后取前 16 位），避免 36 位超服务端上限
 - `src/custom-nav/ui/CustomNavPage.tsx`：嵌入页 `/custom/:id`
@@ -92,16 +98,33 @@ PUT 校验：`items` 必须数组；逐条 `sanitizeCustomNavItem`，任一非�
 3. **iframe 高度**：自动跟随被引用页的内容高度（`CustomNavPage.tsx` 写入 inline `height`）
    - ① **同源**：`onLoad` 直接读 `contentDocument.documentElement/body.scrollHeight`，
      并用 `ResizeObserver` 监听 `documentElement` + `body`，内容变化时实时更新
-   - ② **跨源**：读不到文档，改为监听对端 `postMessage`：
-     上报格式 `{ type: "cnav:height", height: 1234 }`（也接受纯数字）；
-     加载完成与窗口 resize 时主动发 `{ type: "cnav:request-height" }` 请求对端上报。
-     只接受 `event.source === iframe.contentWindow` 的消息
-   - ③ **都拿不到**（跨源且页面未配合）：CSS 兜底 `height: calc(100dvh - 170px)` + `min-height: 320px`，
+   - ② **跨源**：读不到文档，改为监听对端 `postMessage` 上报。**各家 type 名称不统一**，因此做了归一化：
+     - 自动模式（`heightMessageType` 留空）：type 含 `height` / `resize` / `size` 即接受
+       （覆盖 `memos-embed-height`、`IFRAME_HEIGHT`、`iframe:resize`、`setHeight` 等）；
+       无 type 时接受纯数字载荷或 `{ height: n }`
+     - 覆盖模式（菜单填了 `heightMessageType`）：只接受该 type（大小写不敏感），
+       另始终兼容本站协议 `cnav:height`
+     - 载荷归一化 `readHeight()`：数字、`"1234px"`、JSON 字符串、
+       `{height}` / `{scrollHeight}` / `{contentHeight}` / `{h}` / `{value}` / `{size}`，
+       以及嵌套的 `data` / `payload` / `detail` / `result`
+     - 加载完成与窗口 resize 时主动发 `{ type: "cnav:request-height" }` 请对端重新上报
+     - 只接受 `event.source === iframe.contentWindow` 的消息
+   - ③ **都拿不到**（跨源且页面不上报）：CSS 兜底 `height: calc(100dvh - 170px)` + `min-height: 320px`，
      页面自身仍可滚动
    - 屏幕尺寸变化时：同源重新量取，跨源重新请求上报
 4. iframe 样式：去边框、`background: transparent`（只透出本站底色）、
    `scrollbar-width: none` / `-ms-overflow-style: none` / `::-webkit-scrollbar` 全程隐藏滚动条（内容仍可滚）。
    sandbox = `allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals`。
+
+### 防误判四道闸（跨源消息）
+
+1. **来源校验**：`event.source` 必须等于本 iframe 的 `contentWindow`
+2. **type 校验**：自动模式要求 type 含 `height`/`resize`/`size`；覆盖模式要求精确匹配
+3. **范围校验**：只接受 `[100, 50000]` px 的整数值，超出视为噪声丢弃
+4. **抖动抑制**：与当前高度差 < 2px 的变化不触发重排，避免 iframe 与页面互相 resize 形成死循环
+
+> 仍可能误判的场景：页面用含 `height` 的 type 上报「某个子元素」的高度。
+> 此时在菜单里填明确的 `heightMessageType` 即可收敛。
 
 > 调参点：容器最大宽度 `1200px`、移动端断点 `640px`、两侧留白 `16px`、兜底高度 `170px`，都在 `custom-nav.css`。
 > 已彻底移除旧的 `.app-shell.has-cnav` flex 高度链与 `--cnav-extra` 变量。
@@ -143,22 +166,25 @@ PUT 校验：`items` 必须数组；逐条 `sanitizeCustomNavItem`，任一非�
 3. **嵌入模式已无「在新标签打开」逃生口**：嵌入被拒时，唯一办法是把该菜单改成 `tab` 模式。
 4. **配置是全局的**（所有登录用户共享），并非按用户隔离。
 5. 最多 20 项；与上游共用 `settings` 表的 KV，key 固定为 `custom_nav_items`。
-6. **跨源页面无法自动读取内容高度**（同源策略）：只有同源页面能直接量取；
-   跨域页面需要对方主动 `postMessage({ type: "cnav:height", height })` 上报，
-   否则退化为视口高度兜底（`calc(100dvh - 170px)`），此时若内容更长会由 iframe 自身滚动。
-   隐藏的是滚动条外观，滚动能力仍保留。
+6. **跨源页面无法主动读取内容高度**（同源策略）：只有同源页面能直接量取；
+   跨域页面必须由**对方**主动 `postMessage` 上报才能自动同步。当前按「自动嗅探 type 关键字 + 载荷归一化」
+   兼容大多数实现（如 memos 的 `memos-embed-height`）；若某个页面的 type 不含 `height`/`resize`/`size`，
+   可在菜单里填 `heightMessageType` 精确指定。
+   两者都不满足时退化为视口高度兜底（`calc(100dvh - 170px)`），内容更长会由 iframe 内部滚动，
+   隐藏的只是滚动条外观，滚动能力仍保留。
 
 ## 9. 验证
 
 ```bash
-npx vitest run --maxWorkers=1 tests/api/custom-nav.test.ts   # 6/6 通过
+npx vitest run --maxWorkers=1 tests/api/custom-nav.test.ts   # 7/7 通过
 npm run lint
 npx vite build
 ```
 
 测试覆盖：未登录 401、空列表 → PUT 回读 → 整体覆盖、拒绝非法 url/名称/id、
 36 位 UUID 样式 id 可接受（历史回归）、settings 只存一条 `custom_nav_items`（无需迁移）、
-历史 `width`/`height` 被丢弃（尺寸改由容器统一控制）。
+历史 `width`/`height` 被丢弃（尺寸改由容器统一控制）、
+`heightMessageType` 保留合法值并去空白、写坏时退回自动识别。
 
 ## 10. 提交历史
 
@@ -168,7 +194,8 @@ npx vite build
 | `cf09e14` | fix: 管理弹窗被顶栏 `backdrop-filter` 截断 → Portal 渲染到 body，z-index 提到 9999 |
 | `779e598` | feat: 嵌入模式菜单支持手动锁定 iframe 宽高 |
 | `22d6d2e` | fix: 嵌入页 iframe 背景透明，移除加载提示与「在新标签打开」入口 |
-| 2026-10-21 | refactor: 移除手动宽高配置，改外层容器（PC ≤1200px 居中 / 移动端撑满）+ iframe 宽度 100% + 高度跟随内容 |
+| `0859d0e` | refactor: 移除手动宽高配置，改外层容器（PC ≤1200px 居中 / 移动端撑满）+ iframe 宽度 100% + 高度跟随内容 |
+| 2026-10-21 | feat: 跨源高度上报通用化（自动嗅探 type 关键字 + 载荷归一化 + 防误判四道闸），并支持菜单级 `heightMessageType` 覆盖 |
 
 ## 11. 上游仓库更新后的恢复办法
 
@@ -244,7 +271,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 Select-String -Path src\worker\api\index.ts -Pattern "custom-nav"
 Select-String -Path src\web\App.tsx -Pattern "CustomNav"
 Select-String -Path public\_headers -Pattern "frame-src"
-npx vitest run --maxWorkers=1 tests/api/custom-nav.test.ts    # 期望 6/6 通过
+npx vitest run --maxWorkers=1 tests/api/custom-nav.test.ts    # 期望 7/7 通过
 ```
 
 四项都命中即恢复成功。再跑 `npm run lint` 与 `npx vite build` 收尾。
