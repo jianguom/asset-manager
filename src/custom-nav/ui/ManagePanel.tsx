@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { CUSTOM_NAV_SIZE_MAX, CUSTOM_NAV_SIZE_MIN } from "../types";
 import type { CustomNavItem, CustomNavMode } from "../types";
 import { saveNavItems } from "./store";
 import { navText } from "./text";
@@ -17,18 +16,9 @@ const newId = () =>
 		? crypto.randomUUID().replace(/-/g, "").slice(0, 16)
 		: `nav-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-type FormState = { name: string; url: string; mode: CustomNavMode; width: string; height: string };
+type FormState = { name: string; url: string; mode: CustomNavMode };
 
-const EMPTY_FORM: FormState = { name: "", url: "", mode: "embed", width: "", height: "" };
-
-/** 尺寸输入解析：留空 = 自适应（undefined）；非整数或越界 = null（提示报错） */
-const parseSize = (raw: string): number | undefined | null => {
-	const value = raw.trim();
-	if (!value) return undefined;
-	const n = Number(value);
-	if (!Number.isInteger(n) || n < CUSTOM_NAV_SIZE_MIN || n > CUSTOM_NAV_SIZE_MAX) return null;
-	return n;
-};
+const EMPTY_FORM: FormState = { name: "", url: "", mode: "embed" };
 
 export function ManagePanel({ items, onClose, onSaved }: Props) {
 	const t = navText(useT().lang);
@@ -39,13 +29,7 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 	const [error, setError] = useState<string | null>(null);
 
 	const beginEdit = (item: CustomNavItem) => {
-		setForm({
-			name: item.name,
-			url: item.url,
-			mode: item.mode,
-			width: item.width?.toString() ?? "",
-			height: item.height?.toString() ?? "",
-		});
+		setForm({ name: item.name, url: item.url, mode: item.mode });
 		setEditingId(item.id);
 	};
 
@@ -73,20 +57,8 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 			setError(t.invalidUrl);
 			return;
 		}
-		// 尺寸仅在嵌入方式下生效：切到「新标签打开」时不保留，避免留下无意义的死配置
-		let width: number | undefined;
-		let height: number | undefined;
-		if (form.mode === "embed") {
-			const parsedWidth = parseSize(form.width);
-			const parsedHeight = parseSize(form.height);
-			if (parsedWidth === null || parsedHeight === null) {
-				setError(t.invalidSize);
-				return;
-			}
-			width = parsedWidth;
-			height = parsedHeight;
-		}
-		setList((prev) => prev.map((item) => (item.id === editingId ? { ...item, name, url, mode: form.mode, width, height } : item)));
+		// 尺寸不再可配：嵌入页统一「容器最大 1200px 居中 + 高度跟随内容」
+		setList((prev) => prev.map((item) => (item.id === editingId ? { ...item, name, url, mode: form.mode } : item)));
 		setEditingId(null);
 		setForm(EMPTY_FORM);
 		setError(null);
@@ -170,33 +142,6 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 									<option value="tab">{t.tab}</option>
 								</select>
 							</div>
-							{form.mode === "embed" && (
-								<>
-									<div className="cnav-form-row">
-										<label>{t.width}</label>
-										<input
-											type="number"
-											min={CUSTOM_NAV_SIZE_MIN}
-											max={CUSTOM_NAV_SIZE_MAX}
-											value={form.width}
-											placeholder={t.sizeAuto}
-											onChange={(event) => setForm({ ...form, width: event.target.value })}
-										/>
-									</div>
-									<div className="cnav-form-row">
-										<label>{t.height}</label>
-										<input
-											type="number"
-											min={CUSTOM_NAV_SIZE_MIN}
-											max={CUSTOM_NAV_SIZE_MAX}
-											value={form.height}
-											placeholder={t.sizeAuto}
-											onChange={(event) => setForm({ ...form, height: event.target.value })}
-										/>
-									</div>
-									<p className="cnav-form-hint">{t.sizeHint}</p>
-								</>
-							)}
 							<div className="cnav-form-actions">
 								<button className="ghost" onClick={cancelEdit}>{t.cancel}</button>
 								<button onClick={saveRow}>{t.save}</button>
@@ -207,7 +152,6 @@ export function ManagePanel({ items, onClose, onSaved }: Props) {
 							<span className="cnav-row-name">{item.name}</span>
 							<span className="cnav-row-url">{item.url}</span>
 							<span className="cnav-badge">{item.mode === "embed" ? t.embed : t.tab}</span>
-							{item.width && item.height && <span className="cnav-badge">{`${item.width}×${item.height}`}</span>}
 							<div className="cnav-row-actions">
 								<button className="ghost" title={t.moveUp} onClick={() => move(item.id, -1)}>↑</button>
 								<button className="ghost" title={t.moveDown} onClick={() => move(item.id, 1)}>↓</button>

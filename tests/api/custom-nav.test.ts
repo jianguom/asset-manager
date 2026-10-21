@@ -89,27 +89,20 @@ describe("自定义导航菜单（src/custom-nav/）", () => {
 		expect(envRow?.value).toBe(JSON.stringify(items));
 	});
 
-	it("嵌入模式可锁定 iframe 尺寸：越界夹到边界，非数字视为自适应", async () => {
+	it("尺寸不再由菜单配置：历史数据里的 width / height 会被丢弃", async () => {
 		const { cookie } = await bootstrap();
 		const saved = await call<Envelope<{ items: Array<Record<string, unknown>> }>>(NAV, {
 			method: "PUT",
 			cookie,
 			body: JSON.stringify({
-				items: [
-					{ id: "sized", name: "定尺面板", url: "https://example.com/panel", mode: "embed", width: 1200, height: 800 },
-					{ id: "clamped", name: "越界", url: "https://example.com/big", mode: "embed", width: 99999, height: 10 },
-					{ id: "auto", name: "自适应", url: "https://example.com/auto", mode: "embed", width: "abc" },
-				],
+				items: [{ id: "legacy", name: "历史定尺面板", url: "https://example.com/panel", mode: "embed", width: 1200, height: 800 }],
 			}),
 		});
 		expect(saved.status).toBe(200);
-		const items = saved.body.data.items;
-		expect(items[0]).toMatchObject({ width: 1200, height: 800 });
-		expect(items[1]).toMatchObject({ width: 4000, height: 100 }); // 夹到上限 / 下限
-		expect(items[2].width).toBeUndefined(); // 非数字 → 自适应，不落字段
-		expect(items[2].height).toBeUndefined();
+		// 嵌入页尺寸改由容器与内容高度统一控制，旧的宽高配置不再保留
+		expect(saved.body.data.items[0]).toEqual({ id: "legacy", name: "历史定尺面板", url: "https://example.com/panel", mode: "embed" });
 
 		const fetched = await call<Envelope<{ items: Array<Record<string, unknown>> }>>(NAV, { cookie });
-		expect(fetched.body.data.items).toEqual(items);
+		expect(fetched.body.data.items).toEqual(saved.body.data.items);
 	});
 });

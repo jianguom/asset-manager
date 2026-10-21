@@ -104,16 +104,9 @@
 }
 .cnav-form-row input[type="text"],
 .cnav-form-row input[type="url"],
-.cnav-form-row input[type="number"],
 .cnav-form-row select {
 	flex: 1;
 	min-width: 0;
-}
-/* 尺寸输入行的说明文字：与 label 的宽度对齐，视觉上归属同一条目 */
-.cnav-form-hint {
-	margin: 0 0 0 78px;
-	font-size: 12px;
-	color: var(--muted);
 }
 .cnav-form-actions {
 	display: flex;
@@ -151,38 +144,24 @@
 }
 
 /* ── 嵌入页（/custom/:id）──
-   高度基线 = 「撑满顶栏以下的剩余视口」，再叠加 --cnav-extra 的余量：
-   .app-shell 总高 = 100dvh + --cnav-extra，顶栏按内容自然排布、
-   嵌入区用 flex 吃掉剩余空间 —— iframe 因此比「刚好一屏」再高一点，
-   页面多出一小截可滚动空间，嵌入内容不会被顶到最下边缘。
-   想增减这截余量只改 --cnav-extra（改大→留白更多，改 0→正好一屏）。
-   用 .has-cnav 类选择器而非 :has()，兼容不支持 :has() 的旧浏览器。 */
-:root {
-	--cnav-extra: 40px;
-}
-.app-shell.has-cnav {
-	display: flex;
-	flex-direction: column;
-	min-height: calc(100vh + var(--cnav-extra));
-	min-height: calc(100dvh + var(--cnav-extra));
-	/* 抵消通用 .app-shell 的 64px 底部留白，否则会多出一截空白滚动 */
-	padding-bottom: 0;
-}
-.app-shell.has-cnav .topbar {
-	flex-shrink: 0;
-}
+   尺寸不再由菜单配置，统一由这一层容器控制：
+   - 外层 .cnav-frame：PC 端最大 1200px、水平居中、两侧留白；窄屏自动撑满
+   - iframe 宽度 100% 跟随容器；高度由组件按被嵌页面内容高度写入 inline style
+   - 高度拿不到时（跨源且页面未上报）用视口高度兜底，避免出现 0 高度
+   - iframe 自身滚动条全程隐藏（内容仍可滚） */
 .cnav-page {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	flex: 1;
-	min-height: 0;
+	display: block;
 }
 .cnav-toolbar {
-	flex: 0 0 auto;
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	margin-bottom: 8px;
+	max-width: 1200px;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 0 16px;
+	box-sizing: border-box;
 }
 .cnav-title {
 	font-weight: 600;
@@ -193,14 +172,20 @@
 	white-space: nowrap;
 }
 .cnav-frame {
-	flex: 1;
-	min-height: 0;
 	width: 100%;
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 0 16px;
+	box-sizing: border-box;
+	overflow: hidden;
 }
 .cnav-frame iframe {
 	display: block;
 	width: 100%;
-	height: 100%;
+	/* 兜底高度：内容高度未取到时至少占满顶栏以下的视口，页面自身仍可滚动 */
+	height: calc(100vh - 170px);
+	height: calc(100dvh - 170px);
+	min-height: 320px;
 	border: none;
 	/* 背景透明：只透出本站底色。被嵌站点若自己设了底色，那是它的文档背景，跨域无法覆盖 */
 	background: transparent;
@@ -212,4 +197,13 @@
 	width: 0;
 	height: 0;
 	display: none;
+}
+
+/* 移动端：去掉两侧留白，直接撑满屏幕宽度 */
+@media (max-width: 640px) {
+	.cnav-toolbar,
+	.cnav-frame {
+		max-width: none;
+		padding: 0;
+	}
 }
